@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@latest/dist/html2canvas.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@latest/dist/jspdf.umd.min.js" defer></script>
   </head>
   <body>
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -261,7 +263,7 @@
         </div>
 
         <div id="page-report" class="page-content report-page">
-          <div class="report-page-content">
+          <div id="report-content" class="report-page-content">
             <header class="page-header">
               <div>
                 <h1 class="page-title">상세·PDF 출력</h1>
@@ -274,8 +276,8 @@
                 <button class="action-button action-button--secondary" id="report-list-button" type="button">
                   목록
                 </button>
-                <button class="action-button action-button--primary" id="print-button" type="button">
-                  완성 및 PDF 출력
+                <button class="action-button action-button--primary" id="export-pdf-button" type="button">
+                  완료 처리 후 PDF 다운로드
                 </button>
               </div>
             </header>

@@ -262,6 +262,119 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         previewCard.append(brand, title, meta, divider, workList);
       }
 
+      async function exportPDF() {
+        if (typeof window.html2canvas !== "function" || typeof window.jspdf?.jsPDF !== "function") {
+          throw new Error("PDF 내보내기 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
+        }
+
+        const reportContent = document.querySelector("#report-content");
+        const bounds = reportContent.getBoundingClientRect();
+        if (bounds.width === 0 || bounds.height === 0) {
+          throw new Error("보고서 화면이 표시되지 않아 PDF를 만들 수 없습니다.");
+        }
+
+        await document.fonts.ready;
+
+        const scale = Math.min(
+          2,
+          8192 / Math.max(bounds.width, bounds.height),
+          Math.sqrt(12000000 / (bounds.width * bounds.height))
+        );
+        let canvas;
+
+        try {
+          canvas = await window.html2canvas(reportContent, {
+            allowTaint: false,
+            backgroundColor: null,
+            logging: false,
+            scale,
+            useCORS: true,
+            windowWidth: 1024,
+            scrollX: 0,
+            scrollY: 0,
+            onclone: (clonedDocument) => {
+              const clonedContent = clonedDocument.querySelector("#report-content");
+              clonedContent.style.background = getComputedStyle(document.querySelector("#page-report")).background;
+              clonedContent.style.display = "block";
+              clonedContent.style.width = "794px";
+              clonedContent.style.minHeight = "0";
+              clonedContent.style.height = "auto";
+              clonedContent.style.margin = "0";
+              clonedContent.style.padding = "24px";
+              clonedContent.style.boxSizing = "border-box";
+              clonedContent.querySelector(".report-actions")?.remove();
+            }
+          });
+
+          if (canvas.width === 0 || canvas.height === 0) {
+            throw new Error("보고서 내용을 이미지로 변환하지 못했습니다.");
+          }
+
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+            compress: true
+          });
+          const pageWidthMm = 210;
+          const pageHeightMm = 297;
+          const pageHeightPx = Math.floor(canvas.width * pageHeightMm / pageWidthMm);
+          const pageCount = Math.ceil(canvas.height / pageHeightPx);
+
+          for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+            const sourceY = pageIndex * pageHeightPx;
+            const sliceHeight = Math.min(pageHeightPx, canvas.height - sourceY);
+            const pageCanvas = document.createElement("canvas");
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sliceHeight;
+
+            try {
+              const context = pageCanvas.getContext("2d");
+              if (!context) {
+                throw new Error("PDF 페이지를 준비하지 못했습니다.");
+              }
+              context.drawImage(
+                canvas,
+                0,
+                sourceY,
+                canvas.width,
+                sliceHeight,
+                0,
+                0,
+                canvas.width,
+                sliceHeight
+              );
+
+              if (pageIndex > 0) {
+                pdf.addPage("a4", "portrait");
+              }
+              const imageHeightMm = sliceHeight * pageWidthMm / canvas.width;
+              pdf.addImage(
+                pageCanvas.toDataURL("image/jpeg", 0.95),
+                "JPEG",
+                0,
+                0,
+                pageWidthMm,
+                imageHeightMm,
+                undefined,
+                "FAST"
+              );
+            } finally {
+              pageCanvas.width = 0;
+              pageCanvas.height = 0;
+            }
+          }
+
+          await pdf.save("업무보고서.pdf");
+        } finally {
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
+        }
+      }
+
       function getStatusPresentation(status) {
         if (status === "완료" || status === "已完成") {
           return { label: "완료 / 已完成", className: "status--complete" };
@@ -886,12 +999,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         switchPage("page-dashboard");
       });
 
-      document.querySelector("#print-button").addEventListener("click", async () => {
+      const exportPdfButton = document.querySelector("#export-pdf-button");
+      exportPdfButton.addEventListener("click", async () => {
         if (!selectedReport || selectedReport.id === undefined) {
           await showMessage("내보낼 업무 일지를 찾을 수 없습니다.");
           return;
         }
 
+        exportPdfButton.disabled = true;
         try {
           const { data, error } = await supabaseClient
             .from("work_logs")
@@ -910,11 +1025,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           selectedReport = toWorkLog(data);
           await refreshWorkLogs();
           renderReportPage(selectedReport);
-          await showMessage("성공적으로 저장되었습니다!");
-          window.print();
+          await exportPDF();
         } catch (error) {
-          console.error("Unable to mark the work log as complete.", error);
-          await showMessage(`업무일지 상태를 저장하지 못했습니다: ${error.message}`);
+          console.error("Unable to complete or export the work log.", error);
+          await showMessage(`업무일지 완료 처리 또는 PDF 내보내기에 실패했습니다: ${error.message}`);
+        } finally {
+          exportPdfButton.disabled = false;
         }
       });
 
