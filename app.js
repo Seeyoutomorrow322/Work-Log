@@ -8,6 +8,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       const authForm = document.querySelector("#auth-form");
       const authStatus = document.querySelector("#auth-status");
       const authError = document.querySelector("#auth-error");
+      const authSuccessToast = document.querySelector("#auth-success-toast");
       const mainApp = document.querySelector("#main-app");
       const userDisplay = document.querySelector("#userDisplay");
       const userProfileContainer = document.querySelector("#userProfileCard");
@@ -46,6 +47,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let selectedReport = null;
       let editingLogId = null;
       let isUpdatingPassword = false;
+      let isCompletingSignup = false;
+      let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
 
@@ -499,6 +502,15 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         authError.hidden = !message;
       }
 
+      function showAuthSuccess(message) {
+        window.clearTimeout(authSuccessToastTimeout);
+        authSuccessToast.textContent = message;
+        authSuccessToast.hidden = false;
+        authSuccessToastTimeout = window.setTimeout(() => {
+          authSuccessToast.hidden = true;
+        }, 3000);
+      }
+
       async function applyAuthSession(session) {
         const nextUser = session?.user ?? null;
         if (currentUser?.id !== nextUser?.id) {
@@ -583,19 +595,30 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
         const signupButton = document.querySelector("#signup-button");
         signupButton.disabled = true;
+        isCompletingSignup = true;
         try {
           const { data, error } = await supabaseClient.auth.signUp({ email, password });
           if (error) {
             throw error;
           }
-          if (!data.session) {
-            authStatus.textContent = "계정 생성 요청이 완료되었습니다. 이메일을 확인한 뒤 로그인해 주세요.";
-            showAuthError("");
+          if (data.session) {
+            const { error: signOutError } = await supabaseClient.auth.signOut({ scope: "local" });
+            if (signOutError) {
+              throw new Error(`계정은 생성되었지만 로그인 화면으로 이동하지 못했습니다: ${signOutError.message}`);
+            }
+            await applyAuthSession(null);
           }
+          showAuthError("");
+          document.querySelector("#auth-password").value = "";
+          authStatus.textContent = data.session
+            ? "계정 생성이 완료되었습니다. 로그인해 주세요."
+            : "계정 생성이 완료되었습니다. 이메일을 확인한 뒤 로그인해 주세요.";
+          showAuthSuccess("회원가입이 성공하였습니다.");
         } catch (error) {
           console.error("Supabase sign-up failed.", error);
           showAuthError(error.message);
         } finally {
+          isCompletingSignup = false;
           signupButton.disabled = false;
         }
       });
@@ -891,7 +914,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (isUpdatingPassword) {
+        if (isUpdatingPassword || (isCompletingSignup && event === "SIGNED_IN")) {
           return;
         }
         window.setTimeout(() => {
