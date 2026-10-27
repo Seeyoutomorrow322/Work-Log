@@ -16,6 +16,10 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       const nicknameForm = document.querySelector("#nickname-form");
       const nicknameError = document.querySelector("#nickname-error");
       const userProfileTrigger = document.querySelector("#user-profile-trigger");
+      const messageDialog = document.querySelector("#message-dialog");
+      const messageDialogText = document.querySelector("#message-dialog-text");
+      const messageDialogCancel = document.querySelector("#message-dialog-cancel");
+      const messageDialogConfirm = document.querySelector("#message-dialog-confirm");
       const pageContents = document.querySelectorAll(".page-content");
       const navigationItems = document.querySelectorAll("[data-nav-target]");
       const workLogForm = document.querySelector("#work-log-form");
@@ -32,6 +36,33 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       let workLogs = [];
       let selectedReport = null;
       let editingLogId = null;
+      let resolveMessageDialog = null;
+      let messageDialogQueue = Promise.resolve();
+
+      function closeMessageDialog(result) {
+        const resolve = resolveMessageDialog;
+        resolveMessageDialog = null;
+        messageDialog.close();
+        resolve?.(result);
+      }
+
+      function showMessage(message, needsConfirmation = false) {
+        const pendingMessage = messageDialogQueue.then(() => new Promise((resolve) => {
+          messageDialogText.textContent = message;
+          messageDialogCancel.hidden = !needsConfirmation;
+          resolveMessageDialog = resolve;
+          messageDialog.showModal();
+        }));
+        messageDialogQueue = pendingMessage.then(() => undefined, () => undefined);
+        return pendingMessage;
+      }
+
+      messageDialogCancel.addEventListener("click", () => closeMessageDialog(false));
+      messageDialogConfirm.addEventListener("click", () => closeMessageDialog(true));
+      messageDialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeMessageDialog(false);
+      });
 
       function toWorkLog(row) {
         const log = { ...row };
@@ -357,7 +388,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
           userDisplay.textContent = currentUsername;
           workLogForm.elements.namedItem("author").value = currentUsername;
-          alert(`사용자 프로필 또는 업무일지를 불러오지 못했습니다: ${error.message}`);
+          await showMessage(`사용자 프로필 또는 업무일지를 불러오지 못했습니다: ${error.message}`);
           workLogs = [];
           renderTable([]);
         }
@@ -482,7 +513,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
             renderReportPage(selectedReport);
           }
           closeNicknameModal();
-          alert("닉네임이 저장되었습니다! (名称保存成功!)");
+          await showMessage("닉네임이 저장되었습니다!");
         } catch (error) {
           console.error("Unable to update username.", error);
           showUsernameError(`이름을 저장하지 못했습니다: ${error.message}`);
@@ -499,7 +530,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           }
         } catch (error) {
           console.error("Supabase sign-out failed.", error);
-          alert(`로그아웃하지 못했습니다: ${error.message}`);
+          await showMessage(`로그아웃하지 못했습니다: ${error.message}`);
         }
       });
 
@@ -513,7 +544,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         const deleteButton = event.target.closest(".btn-delete");
         if (deleteButton) {
           event.preventDefault();
-          if (!confirm("정말 삭제하시겠습니까?")) {
+          if (!(await showMessage("정말 삭제하시겠습니까?", true))) {
             return;
           }
 
@@ -534,7 +565,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
             await refreshWorkLogs();
           } catch (error) {
             console.error("Unable to delete work log.", error);
-            alert(`업무일지를 삭제하지 못했습니다: ${error.message}`);
+            await showMessage(`업무일지를 삭제하지 못했습니다: ${error.message}`);
             return;
           }
           return;
@@ -552,7 +583,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
       document.querySelector("#save-demo-button").addEventListener("click", async (event) => {
         if (!currentUser) {
-          alert("업무일지를 저장하려면 먼저 로그인해 주세요.");
+          await showMessage("업무일지를 저장하려면 먼저 로그인해 주세요.");
           return;
         }
 
@@ -583,14 +614,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
             await refreshWorkLogs();
           } catch (refreshError) {
             console.error("Work log was saved, but the list could not be refreshed.", refreshError);
-            alert(`저장했지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
+            await showMessage(`저장했지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
           }
-          alert("저장되었습니다! (保存成功!)");
+          await showMessage("저장되었습니다!");
           switchPage("page-report");
           renderReportPage(savedLog);
         } catch (error) {
           console.error("Unable to save work log to Supabase.", error);
-          alert(`업무일지를 저장하지 못했습니다: ${error.message}`);
+          await showMessage(`업무일지를 저장하지 못했습니다: ${error.message}`);
         } finally {
           saveButton.disabled = false;
         }
@@ -611,7 +642,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
       document.querySelector("#print-button").addEventListener("click", async () => {
         if (!selectedReport || selectedReport.id === undefined) {
-          alert("내보낼 업무일지를 찾을 수 없습니다. / 找不到要导出的工作日志。");
+          await showMessage("내보낼 업무 일지를 찾을 수 없습니다.");
           return;
         }
 
@@ -621,19 +652,23 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
             .update({ status: "완료" })
             .eq("id", selectedReport.id)
             .select()
-            .single();
+            .maybeSingle();
           if (error) {
             throw error;
+          }
+          if (!data) {
+            await showMessage("내보낼 수 있는 업무 일지가 없습니다. 먼저 편집 페이지에서 작성을 완료하고 저장해 주세요.");
+            return;
           }
 
           selectedReport = toWorkLog(data);
           await refreshWorkLogs();
           renderReportPage(selectedReport);
-          alert("성공적으로 저장되었습니다! (保存成功!)");
+          await showMessage("성공적으로 저장되었습니다!");
           window.print();
         } catch (error) {
           console.error("Unable to mark the work log as complete.", error);
-          alert(`업무일지 상태를 저장하지 못했습니다: ${error.message}`);
+          await showMessage(`업무일지 상태를 저장하지 못했습니다: ${error.message}`);
         }
       });
 

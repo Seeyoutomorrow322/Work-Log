@@ -8,6 +8,7 @@
     <title>전체 현황 · Dashboard · 仪表盘</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   </head>
   <body>
@@ -44,23 +45,23 @@
 
         <nav class="nav-list" aria-label="주요 메뉴 / Main navigation / 主导航">
           <a class="nav-link" href="#page-dashboard" data-nav-target="page-dashboard" aria-current="page">
-            <span class="nav-icon" aria-hidden="true">▦</span>
+            <i class="nav-icon bx bx-dashboard" aria-hidden="true"></i>
             <span class="nav-label"><strong>전체 현황</strong><small>Dashboard / 仪表盘</small></span>
           </a>
           <a class="nav-link" href="#page-list" data-nav-target="page-list">
-            <span class="nav-icon" aria-hidden="true">☷</span>
+            <i class="nav-icon bx bx-list-ul" aria-hidden="true"></i>
             <span class="nav-label"><strong>업무일지 목록</strong><small>List / 列表</small></span>
           </a>
           <a class="nav-link" href="#page-editor" data-nav-target="page-editor">
-            <span class="nav-icon" aria-hidden="true">✎</span>
+            <i class="nav-icon bx bx-file-plus" aria-hidden="true"></i>
             <span class="nav-label"><strong>업무일지 작성</strong><small>Editor / 编辑</small></span>
           </a>
           <a class="nav-link" href="#page-report" data-nav-target="page-report">
-            <span class="nav-icon" aria-hidden="true">▤</span>
+            <i class="nav-icon bx bx-file-pdf" aria-hidden="true"></i>
             <span class="nav-label"><strong>상세·PDF 출력</strong><small>Report / 报告</small></span>
           </a>
           <a class="nav-link" href="#page-specification" data-nav-target="page-specification">
-            <span class="nav-icon" aria-hidden="true">◇</span>
+            <i class="nav-icon bx bx-book-open" aria-hidden="true"></i>
             <span class="nav-label"><strong>개발 가이드</strong><small>Specification / 规范</small></span>
           </a>
         </nav>
@@ -360,6 +361,16 @@
         </div>
       </form>
     </div>
+    <dialog id="message-dialog" class="message-dialog" aria-labelledby="message-dialog-title" aria-describedby="message-dialog-text">
+      <div class="message-dialog-content">
+        <h2 id="message-dialog-title">알림</h2>
+        <p id="message-dialog-text"></p>
+        <div class="action-bar">
+          <button class="action-button action-button--secondary" id="message-dialog-cancel" type="button">취소</button>
+          <button class="action-button action-button--primary" id="message-dialog-confirm" type="button" autofocus>확인</button>
+        </div>
+      </div>
+    </dialog>
     <script src="app.js" defer></script>
   </body>
 </html>
