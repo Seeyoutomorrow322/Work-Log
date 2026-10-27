@@ -92,21 +92,6 @@
         line-height: 1.6;
       }
 
-      .auth-logout-button {
-        margin: 0 0 16px;
-        padding: 7px 10px;
-        border: 1px solid rgba(255, 255, 255, .28);
-        border-radius: 7px;
-        background: transparent;
-        color: #f5f5f1;
-        cursor: pointer;
-        font-size: 11px;
-      }
-
-      .auth-logout-button:hover {
-        background: rgba(255, 255, 255, .1);
-      }
-
       .sidebar-note p {
         margin: 0 0 12px;
       }
@@ -209,6 +194,105 @@
         color: #aab5b1;
         font-size: 12px;
         line-height: 1.8;
+      }
+
+      .sidebar-user {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+
+      .user-profile-trigger {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 9px;
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, .06);
+        color: #f5f5f1;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .user-profile-trigger:hover,
+      .user-profile-trigger:focus-visible {
+        outline: none;
+        border-color: rgba(255, 255, 255, .18);
+        background: rgba(255, 255, 255, .1);
+      }
+
+      .user-avatar {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 50%;
+        background: #35474c;
+        color: #e7ece8;
+        font-size: 14px;
+      }
+
+      .user-display-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        font-size: 12px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .auth-logout-button {
+        justify-self: start;
+        padding: 6px 9px;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 7px;
+        background: transparent;
+        color: #e1e7e3;
+        cursor: pointer;
+        font-size: 10px;
+      }
+
+      .auth-logout-button:hover {
+        background: rgba(255, 255, 255, .1);
+      }
+
+      .nickname-modal-overlay {
+        position: fixed;
+        z-index: 20;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(13, 23, 27, .62);
+        backdrop-filter: blur(3px);
+      }
+
+      .username-modal-content {
+        width: min(420px, calc(100% - 32px));
+        display: grid;
+        gap: 20px;
+        padding: clamp(24px, 5vw, 34px);
+        border: 1px solid rgba(255, 255, 255, .7);
+        border-radius: 16px;
+        background: #f9faf8;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .25);
+        color: #343c42;
+      }
+
+      .username-modal-content h2 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 19px;
+      }
+
+      .username-modal-content .action-bar {
+        justify-content: flex-end;
       }
 
       .main-area {
@@ -988,7 +1072,7 @@
         .sidebar-note {
           display: flex;
           align-items: center;
-          justify-content: flex-end;
+          justify-content: flex-start;
           margin: 8px 0 0;
           padding: 0;
           border: 0;
@@ -998,8 +1082,8 @@
           display: none;
         }
 
-        .auth-logout-button {
-          margin: 0;
+        .sidebar-user {
+          gap: 5px;
         }
 
         .nav-list {

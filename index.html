@@ -7,6 +7,7 @@
     <meta name="description" content="업무일지 전체 현황 / Daily Work Log Dashboard / 工作日志仪表盘">
     <title>전체 현황 · Dashboard · 仪表盘</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   </head>
   <body>
@@ -65,8 +66,13 @@
         </nav>
 
         <div class="sidebar-note">
-          <p id="signed-in-user"></p>
-          <button id="logout-button" class="auth-logout-button" type="button">로그아웃 / Sign out</button>
+          <div class="sidebar-user">
+            <button id="user-profile-trigger" class="user-profile-trigger" type="button" aria-label="닉네임 변경">
+              <span class="user-avatar" aria-hidden="true"><i class="fa-solid fa-user"></i></span>
+              <span id="userDisplay" class="user-display-name"></span>
+            </button>
+            <button id="logout-button" class="auth-logout-button" type="button">退出登录 / 로그아웃</button>
+          </div>
           <p>오늘의 기록이 내일의 풍경이 됩니다.<br>今日记录，明日风景。</p>
         </div>
       </aside>
@@ -339,6 +345,20 @@
           </div>
         </div>
       </main>
+    </div>
+    <div id="nicknameModalOverlay" class="nickname-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="nickname-modal-title" style="display: none;">
+      <form id="nickname-form" class="username-modal-content">
+        <h2 id="nickname-modal-title">修改名称 / 닉네임 변경</h2>
+        <label class="field" for="nicknameInput">
+          <span class="field-label">새 이름 / 新名称</span>
+          <input class="field-control" id="nicknameInput" name="username" type="text" maxlength="50" autocomplete="nickname" required>
+        </label>
+        <p id="nickname-error" class="auth-error" role="alert" hidden></p>
+        <div class="action-bar">
+          <button class="action-button action-button--secondary" id="closeNicknameBtn" type="button">취소 / 取消</button>
+          <button class="action-button action-button--primary" id="saveNicknameBtn" type="submit">저장 / 保存</button>
+        </div>
+      </form>
     </div>
     <script src="app.js" defer></script>
   </body>

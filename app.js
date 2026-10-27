@@ -8,7 +8,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       const authStatus = document.querySelector("#auth-status");
       const authError = document.querySelector("#auth-error");
       const mainApp = document.querySelector("#main-app");
-      const signedInUser = document.querySelector("#signed-in-user");
+      const userDisplay = document.querySelector("#userDisplay");
+      const nicknameModalOverlay = document.querySelector("#nicknameModalOverlay");
+      const nicknameInput = document.querySelector("#nicknameInput");
+      const saveNicknameBtn = document.querySelector("#saveNicknameBtn");
+      const closeNicknameBtn = document.querySelector("#closeNicknameBtn");
+      const nicknameForm = document.querySelector("#nickname-form");
+      const nicknameError = document.querySelector("#nickname-error");
+      const userProfileTrigger = document.querySelector("#user-profile-trigger");
       const pageContents = document.querySelectorAll(".page-content");
       const navigationItems = document.querySelectorAll("[data-nav-target]");
       const workLogForm = document.querySelector("#work-log-form");
@@ -21,6 +28,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         tomorrowPlan: "tomorrow_plan"
       };
       let currentUser = null;
+      let currentUsername = "";
       let workLogs = [];
       let selectedReport = null;
       let editingLogId = null;
@@ -28,7 +36,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       function toWorkLog(row) {
         const log = { ...row };
         if (row.author === currentUser?.id) {
-          log.author = currentUser.email || row.author;
+          log.author = currentUsername || currentUser.email || row.author;
         }
         Object.entries(workLogFieldMap).forEach(([formField, databaseField]) => {
           log[formField] = row[databaseField] ?? "";
@@ -80,6 +88,51 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
       function getWorkLogData() {
         return Object.fromEntries(new FormData(workLogForm).entries());
+      }
+
+      async function getAuthenticatedUser() {
+        const { data: { user }, error } = await supabaseClient.auth.getUser();
+        if (error) {
+          throw error;
+        }
+        if (!user) {
+          throw new Error("로그인한 사용자를 확인할 수 없습니다.");
+        }
+        return user;
+      }
+
+      async function loadOrCreateUserProfile() {
+        const user = await getAuthenticatedUser();
+        const { data: existingProfile, error } = await supabaseClient
+          .from("users")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+        if (existingProfile) {
+          return existingProfile;
+        }
+
+        const defaultUsername = user.email?.split("@")[0] || "user";
+        const { error: insertError } = await supabaseClient
+          .from("users")
+          .insert({ user_id: user.id, username: defaultUsername, avatar_url: null });
+        if (insertError) {
+          throw insertError;
+        }
+        return {
+          user_id: user.id,
+          username: defaultUsername,
+          avatar_url: null
+        };
+      }
+
+      function showUsernameError(message) {
+        nicknameError.textContent = message;
+        nicknameError.hidden = !message;
       }
 
       function renderReportPage(log) {
@@ -271,6 +324,8 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         if (currentUser?.id !== nextUser?.id) {
           workLogs = [];
           selectedReport = null;
+          currentUsername = "";
+          userDisplay.textContent = "";
           renderTable(workLogs);
         }
         currentUser = nextUser;
@@ -279,6 +334,8 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         if (!currentUser) {
           workLogs = [];
           selectedReport = null;
+          currentUsername = "";
+          userDisplay.textContent = "";
           mainApp.hidden = true;
           authScreen.hidden = false;
           authForm.hidden = false;
@@ -288,14 +345,19 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
         authScreen.hidden = true;
         mainApp.hidden = false;
-        signedInUser.textContent = currentUser.email || currentUser.id;
-        workLogForm.elements.namedItem("author").value = currentUser.email || "";
         try {
+          const profile = await loadOrCreateUserProfile();
+          currentUsername = profile.username;
+          userDisplay.textContent = currentUsername;
+          workLogForm.elements.namedItem("author").value = currentUsername;
           await refreshWorkLogs();
           switchPage("page-dashboard");
         } catch (error) {
-          console.error("Unable to load work logs from Supabase.", error);
-          alert(`업무일지를 불러오지 못했습니다: ${error.message}`);
+          console.error("Unable to initialize user profile or load work logs from Supabase.", error);
+          currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
+          userDisplay.textContent = currentUsername;
+          workLogForm.elements.namedItem("author").value = currentUsername;
+          alert(`사용자 프로필 또는 업무일지를 불러오지 못했습니다: ${error.message}`);
           workLogs = [];
           renderTable([]);
         }
@@ -347,6 +409,85 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           showAuthError(error.message);
         } finally {
           signupButton.disabled = false;
+        }
+      });
+
+      function closeNicknameModal() {
+        nicknameModalOverlay.style.display = "none";
+      }
+
+      userProfileTrigger.addEventListener("click", () => {
+        showUsernameError("");
+        nicknameInput.value = currentUsername;
+        nicknameModalOverlay.style.display = "flex";
+        nicknameInput.focus();
+      });
+
+      closeNicknameBtn.addEventListener("click", closeNicknameModal);
+
+      nicknameModalOverlay.addEventListener("click", (event) => {
+        if (event.target === nicknameModalOverlay) {
+          closeNicknameModal();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && nicknameModalOverlay.style.display === "flex") {
+          closeNicknameModal();
+        }
+      });
+
+      nicknameForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showUsernameError("");
+        const newUsername = nicknameInput.value.trim();
+        if (!newUsername || newUsername.length > 50) {
+          showUsernameError("이름은 1자 이상 50자 이하여야 합니다.");
+          return;
+        }
+
+        saveNicknameBtn.disabled = true;
+        try {
+          const supabase = supabaseClient;
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            throw userError;
+          }
+          if (!user) {
+            throw new Error("로그인한 사용자를 확인할 수 없습니다.");
+          }
+
+          const { error } = await supabase
+            .from("users")
+            .upsert(
+              {
+                user_id: user.id,
+                username: newUsername,
+                avatar_url: null,
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: "user_id" }
+            );
+          if (error) {
+            throw error;
+          }
+
+          currentUsername = newUsername;
+          userDisplay.textContent = newUsername;
+          workLogForm.elements.namedItem("author").value = currentUsername;
+          workLogs = workLogs.map((log) => ({ ...log, author: currentUsername }));
+          renderTable(workLogs);
+          if (selectedReport?.author) {
+            selectedReport = { ...selectedReport, author: currentUsername };
+            renderReportPage(selectedReport);
+          }
+          closeNicknameModal();
+          alert("닉네임이 저장되었습니다! (名称保存成功!)");
+        } catch (error) {
+          console.error("Unable to update username.", error);
+          showUsernameError(`이름을 저장하지 못했습니다: ${error.message}`);
+        } finally {
+          saveNicknameBtn.disabled = false;
         }
       });
 
