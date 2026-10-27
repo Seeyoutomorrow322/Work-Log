@@ -1431,51 +1431,13 @@
       let selectedReport = null;
       let editingLogId = null;
 
-      function getDefaultWorkLogs() {
-        return [
-          {
-            id: Date.parse("2026-10-27T00:00:00"),
-            author: "김민서",
-            date: "2026-10-27",
-            status: "완료",
-            assignedWork: "주간 업무 계획 정리",
-            completedWork: "주간 업무 계획 정리",
-            unfinishedWork: "",
-            learning: "주간 업무 우선순위 설정",
-            tomorrowPlan: "팀 주간 회의 준비"
-          },
-          {
-            id: Date.parse("2026-10-26T00:00:00"),
-            author: "이준호",
-            date: "2026-10-26",
-            status: "진행 중",
-            assignedWork: "고객 요청사항 검토 및 회신",
-            completedWork: "요청 내용 검토",
-            unfinishedWork: "최종 회신 대기",
-            learning: "고객 요청 우선순위 분류",
-            tomorrowPlan: "검토 결과 회신"
-          },
-          {
-            id: Date.parse("2026-10-25T00:00:00"),
-            author: "박서연",
-            date: "2026-10-25",
-            status: "완료",
-            assignedWork: "프로젝트 자료 조사 및 공유",
-            completedWork: "프로젝트 자료 조사 및 공유",
-            unfinishedWork: "",
-            learning: "자료 조사 방법 정리",
-            tomorrowPlan: "조사 결과 문서화"
-          }
-        ];
-      }
-
       function loadWorkLogs() {
         try {
           const serializedLogs = localStorage.getItem(workLogsKey);
           if (serializedLogs === null) {
-            const defaultLogs = getDefaultWorkLogs();
-            localStorage.setItem(workLogsKey, JSON.stringify(defaultLogs));
-            return defaultLogs;
+            const emptyLogs = [];
+            localStorage.setItem(workLogsKey, JSON.stringify(emptyLogs));
+            return emptyLogs;
           }
 
           const logs = JSON.parse(serializedLogs);
