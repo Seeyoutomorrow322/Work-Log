@@ -2,6 +2,7 @@ const SUPABASE_URL = "https://hdwkxlynuyunggrgvkvu.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XiDSi6k6FDHr9D56c1a7TA_eQidQJ7w";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='21' r='12' fill='%23e7ece8'/%3E%3Cpath d='M9 59c0-14 10-23 23-23s23 9 23 23' fill='%23e7ece8'/%3E%3C/svg%3E";
 
       const authScreen = document.querySelector("#auth-screen");
       const authForm = document.querySelector("#auth-form");
@@ -9,6 +10,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       const authError = document.querySelector("#auth-error");
       const mainApp = document.querySelector("#main-app");
       const userDisplay = document.querySelector("#userDisplay");
+      const userProfileContainer = document.querySelector("#userProfileCard");
       const nicknameModalOverlay = document.querySelector("#nicknameModalOverlay");
       const nicknameInput = document.querySelector("#nicknameInput");
       const saveNicknameBtn = document.querySelector("#saveNicknameBtn");
@@ -16,6 +18,11 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       const nicknameForm = document.querySelector("#nickname-form");
       const nicknameError = document.querySelector("#nickname-error");
       const userProfileTrigger = document.querySelector("#user-profile-trigger");
+      const avatarFileInput = document.querySelector("#avatar-file-input");
+      const passwordModalOverlay = document.querySelector("#passwordModalOverlay");
+      const passwordForm = document.querySelector("#password-form");
+      const passwordError = document.querySelector("#password-error");
+      const savePasswordBtn = document.querySelector("#savePasswordBtn");
       const messageDialog = document.querySelector("#message-dialog");
       const messageDialogText = document.querySelector("#message-dialog-text");
       const messageDialogCancel = document.querySelector("#message-dialog-cancel");
@@ -24,6 +31,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       const navigationItems = document.querySelectorAll("[data-nav-target]");
       const workLogForm = document.querySelector("#work-log-form");
       const dateInput = document.querySelector("#date");
+      const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
       const workLogFieldMap = {
         assignedWork: "assigned_work",
         completedWork: "completed_work",
@@ -33,9 +41,11 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       };
       let currentUser = null;
       let currentUsername = "";
+      let currentAvatarUrl = null;
       let workLogs = [];
       let selectedReport = null;
       let editingLogId = null;
+      let isUpdatingPassword = false;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
 
@@ -63,6 +73,32 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         event.preventDefault();
         closeMessageDialog(false);
       });
+
+      function closeProfileDropdown() {
+        userProfileContainer.classList.remove("is-open");
+        userProfileContainer.classList.remove("has-focus");
+        userProfileContainer.classList.remove("is-hovered");
+        userProfileTrigger.setAttribute("aria-expanded", "false");
+        if (userProfileContainer.contains(document.activeElement)) {
+          document.activeElement.blur();
+        }
+      }
+
+      function setProfileDropdownOpen(isOpen) {
+        userProfileTrigger.setAttribute("aria-expanded", String(isOpen));
+      }
+
+      function renderUserAvatar(avatarUrl) {
+        const image = userProfileTrigger.querySelector(".user-avatar img");
+        image.onerror = () => {
+          if (image.src === DEFAULT_AVATAR_SRC || currentAvatarUrl !== avatarUrl) {
+            return;
+          }
+          image.src = DEFAULT_AVATAR_SRC;
+          void showMessage("프로필 사진을 불러오지 못했습니다. 저장된 이미지 URL과 파일을 확인해 주세요.");
+        };
+        image.src = avatarUrl || DEFAULT_AVATAR_SRC;
+      }
 
       function toWorkLog(row) {
         const log = { ...row };
@@ -356,7 +392,10 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           workLogs = [];
           selectedReport = null;
           currentUsername = "";
+          currentAvatarUrl = null;
           userDisplay.textContent = "";
+          renderUserAvatar(null);
+          closeProfileDropdown();
           renderTable(workLogs);
         }
         currentUser = nextUser;
@@ -366,7 +405,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           workLogs = [];
           selectedReport = null;
           currentUsername = "";
+          currentAvatarUrl = null;
           userDisplay.textContent = "";
+          renderUserAvatar(null);
           mainApp.hidden = true;
           authScreen.hidden = false;
           authForm.hidden = false;
@@ -379,7 +420,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         try {
           const profile = await loadOrCreateUserProfile();
           currentUsername = profile.username;
+          currentAvatarUrl = profile.avatar_url || null;
           userDisplay.textContent = currentUsername;
+          renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
           await refreshWorkLogs();
           switchPage("page-dashboard");
@@ -387,6 +430,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
           console.error("Unable to initialize user profile or load work logs from Supabase.", error);
           currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
           userDisplay.textContent = currentUsername;
+          renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
           await showMessage(`사용자 프로필 또는 업무일지를 불러오지 못했습니다: ${error.message}`);
           workLogs = [];
@@ -447,11 +491,202 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         nicknameModalOverlay.style.display = "none";
       }
 
+      function closePasswordModal() {
+        passwordModalOverlay.style.display = "none";
+      }
+
+      function showPasswordError(message) {
+        passwordError.textContent = message;
+        passwordError.hidden = !message;
+      }
+
       userProfileTrigger.addEventListener("click", () => {
+        const isOpen = !userProfileContainer.classList.contains("is-open");
+        userProfileContainer.classList.toggle("is-open", isOpen);
+        userProfileContainer.classList.toggle("has-focus", isOpen);
+        setProfileDropdownOpen(isOpen);
+      });
+
+      userProfileContainer.addEventListener("mouseenter", () => {
+        userProfileContainer.classList.add("is-hovered");
+        setProfileDropdownOpen(true);
+      });
+
+      userProfileContainer.addEventListener("mouseleave", () => {
+        userProfileContainer.classList.remove("is-hovered");
+        if (!userProfileContainer.classList.contains("is-open") &&
+            !userProfileContainer.classList.contains("has-focus")) {
+          setProfileDropdownOpen(false);
+        }
+      });
+
+      userProfileContainer.addEventListener("focusin", () => {
+        userProfileContainer.classList.add("has-focus");
+        setProfileDropdownOpen(true);
+      });
+
+      userProfileContainer.addEventListener("focusout", (event) => {
+        if (!userProfileContainer.contains(event.relatedTarget) &&
+            !userProfileContainer.classList.contains("is-open")) {
+          userProfileContainer.classList.remove("has-focus");
+          setProfileDropdownOpen(false);
+        }
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!userProfileContainer.contains(event.target)) {
+          closeProfileDropdown();
+        }
+      });
+
+      document.querySelector("#btnChangeUsername").addEventListener("click", () => {
+        closeProfileDropdown();
         showUsernameError("");
         nicknameInput.value = currentUsername;
         nicknameModalOverlay.style.display = "flex";
         nicknameInput.focus();
+      });
+
+      document.querySelector("#btnChangeAvatar").addEventListener("click", () => {
+        closeProfileDropdown();
+        avatarFileInput.click();
+      });
+
+      document.querySelector("#btnChangePassword").addEventListener("click", () => {
+        closeProfileDropdown();
+        showPasswordError("");
+        passwordForm.reset();
+        passwordModalOverlay.style.display = "flex";
+        passwordForm.elements.namedItem("currentPassword").focus();
+      });
+
+      document.querySelector("#closePasswordBtn").addEventListener("click", closePasswordModal);
+
+      passwordModalOverlay.addEventListener("click", (event) => {
+        if (event.target === passwordModalOverlay) {
+          closePasswordModal();
+        }
+      });
+
+      passwordForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showPasswordError("");
+        const { currentPassword, newPassword, confirmPassword } =
+          Object.fromEntries(new FormData(passwordForm).entries());
+        if (newPassword !== confirmPassword) {
+          showPasswordError("새 비밀번호가 일치하지 않습니다.");
+          return;
+        }
+        if (newPassword === currentPassword) {
+          showPasswordError("현재 비밀번호와 다른 비밀번호를 입력해 주세요.");
+          return;
+        }
+        if (!currentUser?.email) {
+          showPasswordError("이 계정은 이메일 비밀번호 인증을 사용할 수 없습니다.");
+          return;
+        }
+
+        savePasswordBtn.disabled = true;
+        isUpdatingPassword = true;
+        try {
+          const { error: verificationError } = await supabaseClient.auth.signInWithPassword({
+            email: currentUser.email,
+            password: String(currentPassword)
+          });
+          if (verificationError) {
+            throw verificationError;
+          }
+
+          const { error: updateError } = await supabaseClient.auth.updateUser({
+            password: String(newPassword)
+          });
+          if (updateError) {
+            throw updateError;
+          }
+
+          passwordForm.reset();
+          closePasswordModal();
+          await showMessage("비밀번호가 변경되었습니다.");
+        } catch (error) {
+          console.error("Unable to update the password.", error);
+          showPasswordError(`비밀번호를 변경하지 못했습니다: ${error.message}`);
+        } finally {
+          isUpdatingPassword = false;
+          savePasswordBtn.disabled = false;
+        }
+      });
+
+      avatarFileInput.addEventListener("change", async () => {
+        const [file] = avatarFileInput.files;
+        if (!file) {
+          return;
+        }
+        avatarFileInput.value = "";
+
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+          await showMessage("JPG, PNG, WebP 또는 GIF 이미지 파일을 선택해 주세요.");
+          return;
+        }
+        if (file.size > MAX_AVATAR_SIZE) {
+          await showMessage("프로필 사진은 5MB 이하로 업로드해 주세요.");
+          return;
+        }
+
+        const avatarButton = document.querySelector("#btnChangeAvatar");
+        avatarButton.disabled = true;
+        try {
+          const user = await getAuthenticatedUser();
+          const extensionByType = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "image/gif": "gif"
+          };
+          const objectPath = `${user.id}/${Date.now()}.${extensionByType[file.type]}`;
+          const { error: uploadError } = await supabaseClient.storage
+            .from("avatars")
+            .upload(objectPath, file, {
+              cacheControl: "3600",
+              contentType: file.type,
+              upsert: true
+            });
+          if (uploadError) {
+            throw uploadError;
+          }
+
+          const { data: publicUrlData } = supabaseClient.storage
+            .from("avatars")
+            .getPublicUrl(objectPath);
+          const avatarUrl = publicUrlData.publicUrl;
+          if (!avatarUrl) {
+            throw new Error("프로필 사진 URL을 생성하지 못했습니다.");
+          }
+
+          const { data: updatedProfile, error: profileError } = await supabaseClient
+            .from("users")
+            .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+            .eq("user_id", user.id)
+            .select("user_id, avatar_url")
+            .maybeSingle();
+          if (profileError) {
+            throw profileError;
+          }
+          if (!updatedProfile) {
+            throw new Error("사용자 프로필을 찾을 수 없습니다.");
+          }
+          if (updatedProfile.avatar_url !== avatarUrl) {
+            throw new Error("프로필 사진 URL이 사용자 프로필에 저장되지 않았습니다.");
+          }
+
+          currentAvatarUrl = updatedProfile.avatar_url;
+          renderUserAvatar(currentAvatarUrl);
+          await showMessage("프로필 사진이 변경되었습니다.");
+        } catch (error) {
+          console.error("Unable to upload the profile photo.", error);
+          await showMessage(`프로필 사진을 변경하지 못했습니다: ${error.message}`);
+        } finally {
+          avatarButton.disabled = false;
+        }
       });
 
       closeNicknameBtn.addEventListener("click", closeNicknameModal);
@@ -465,6 +700,12 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && nicknameModalOverlay.style.display === "flex") {
           closeNicknameModal();
+        }
+        if (event.key === "Escape" && passwordModalOverlay.style.display === "flex") {
+          closePasswordModal();
+        }
+        if (event.key === "Escape") {
+          closeProfileDropdown();
         }
       });
 
@@ -494,7 +735,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
               {
                 user_id: user.id,
                 username: newUsername,
-                avatar_url: null,
+                avatar_url: currentAvatarUrl,
                 updated_at: new Date().toISOString()
               },
               { onConflict: "user_id" }
@@ -522,12 +763,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
         }
       });
 
-      document.querySelector("#logout-button").addEventListener("click", async () => {
+      document.querySelector("#btnLogout").addEventListener("click", async () => {
+        closeProfileDropdown();
         try {
           const { error } = await supabaseClient.auth.signOut();
           if (error) {
             throw error;
           }
+          await applyAuthSession(null);
         } catch (error) {
           console.error("Supabase sign-out failed.", error);
           await showMessage(`로그아웃하지 못했습니다: ${error.message}`);
@@ -535,6 +778,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
       });
 
       supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (isUpdatingPassword) {
+          return;
+        }
         window.setTimeout(() => {
           void applyAuthSession(session);
         }, 0);

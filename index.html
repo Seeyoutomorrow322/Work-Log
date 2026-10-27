@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#17232b">
     <meta name="description" content="업무일지 전체 현황 / Daily Work Log Dashboard / 工作日志仪表盘">
     <title>전체 현황 · Dashboard · 仪表盘</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=report-preview-bg-v2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
@@ -68,11 +68,27 @@
 
         <div class="sidebar-note">
           <div class="sidebar-user">
-            <button id="user-profile-trigger" class="user-profile-trigger" type="button" aria-label="닉네임 변경">
-              <span class="user-avatar" aria-hidden="true"><i class="fa-solid fa-user"></i></span>
-              <span id="userDisplay" class="user-display-name"></span>
-            </button>
-            <button id="logout-button" class="auth-logout-button" type="button">退出登录 / 로그아웃</button>
+            <div id="userProfileCard" class="user-profile-container">
+              <button id="user-profile-trigger" class="user-profile-trigger profile-header" type="button" aria-label="프로필 메뉴 열기" aria-haspopup="true" aria-controls="profileDropdown" aria-expanded="false">
+                <span class="user-avatar" aria-hidden="true"><img class="user-avatar-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='21' r='12' fill='%23e7ece8'/%3E%3Cpath d='M9 59c0-14 10-23 23-23s23 9 23 23' fill='%23e7ece8'/%3E%3C/svg%3E" alt=""></span>
+                <span id="userDisplay" class="user-display-name"></span>
+              </button>
+              <div id="profileDropdown" class="dropdown-menu" role="group" aria-label="프로필 메뉴">
+                <button id="btnChangeAvatar" class="dropdown-item" type="button">
+                  <i class="bx bx-image" aria-hidden="true"></i> 프로필 사진 변경
+                </button>
+                <button id="btnChangePassword" class="dropdown-item" type="button">
+                  <i class="bx bx-lock" aria-hidden="true"></i> 비밀번호 수정
+                </button>
+                <button id="btnChangeUsername" class="dropdown-item" type="button">
+                  <i class="bx bx-edit" aria-hidden="true"></i> 닉네임 변경
+                </button>
+                <button id="btnLogout" class="dropdown-item logout" type="button">
+                  <i class="bx bx-log-out" aria-hidden="true"></i> 로그아웃
+                </button>
+              </div>
+              <input id="avatar-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+            </div>
           </div>
           <p>오늘의 기록이 내일의 풍경이 됩니다.<br>今日记录，明日风景。</p>
         </div>
@@ -244,8 +260,8 @@
           </div>
         </div>
 
-        <div id="page-report" class="page-content">
-          <div class="dashboard-card">
+        <div id="page-report" class="page-content report-page">
+          <div class="report-page-content">
             <header class="page-header">
               <div>
                 <h1 class="page-title">상세·PDF 출력</h1>
@@ -263,7 +279,7 @@
                 </button>
               </div>
             </header>
-            <div id="report-preview-card" aria-live="polite"></div>
+            <div id="report-preview-card" class="report-document-card" aria-live="polite"></div>
           </div>
         </div>
 
@@ -361,6 +377,28 @@
         </div>
       </form>
     </div>
+    <div id="passwordModalOverlay" class="nickname-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="password-modal-title" style="display: none;">
+      <form id="password-form" class="username-modal-content">
+        <h2 id="password-modal-title">비밀번호 수정</h2>
+        <label class="field" for="current-password">
+          <span class="field-label">현재 비밀번호</span>
+          <input class="field-control" id="current-password" name="currentPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <label class="field" for="new-password">
+          <span class="field-label">새 비밀번호</span>
+          <input class="field-control" id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="6" required>
+        </label>
+        <label class="field" for="confirm-password">
+          <span class="field-label">새 비밀번호 확인</span>
+          <input class="field-control" id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required>
+        </label>
+        <p id="password-error" class="auth-error" role="alert" hidden></p>
+        <div class="action-bar">
+          <button class="action-button action-button--secondary" id="closePasswordBtn" type="button">취소</button>
+          <button class="action-button action-button--primary" id="savePasswordBtn" type="submit">비밀번호 저장</button>
+        </div>
+      </form>
+    </div>
     <dialog id="message-dialog" class="message-dialog" aria-labelledby="message-dialog-title" aria-describedby="message-dialog-text">
       <div class="message-dialog-content">
         <h2 id="message-dialog-title">알림</h2>
@@ -371,6 +409,6 @@
         </div>
       </div>
     </dialog>
-    <script src="app.js" defer></script>
+    <script src="app.js?v=profile-menu-hover" defer></script>
   </body>
 </html>
