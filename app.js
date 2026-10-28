@@ -47,6 +47,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         tomorrowPlan: "tomorrow_plan"
       };
       const workLogSelect = "*, author_uuid:user_id";
+      const USER_CACHE_KEY = "work-log-user";
       let currentUser = null;
       let currentUsername = "";
       let currentAvatarUrl = null;
@@ -58,6 +59,52 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
+      const cachedUser = readCachedUser();
+
+      if (cachedUser) {
+        userDisplay.textContent = cachedUser.username;
+      }
+
+      function readCachedUser() {
+        try {
+          const cachedValue = localStorage.getItem(USER_CACHE_KEY);
+          if (!cachedValue) {
+            return null;
+          }
+          const user = JSON.parse(cachedValue);
+          if (typeof user.email !== "string" || typeof user.username !== "string" ||
+              !user.email.trim() || !user.username.trim()) {
+            localStorage.removeItem(USER_CACHE_KEY);
+            return null;
+          }
+          return { email: user.email, username: user.username };
+        } catch (error) {
+          console.warn("Unable to read cached user information.", error);
+          return null;
+        }
+      }
+
+      function cacheUser(user, username) {
+        if (!user?.email || !username) {
+          return;
+        }
+        try {
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify({
+            email: user.email,
+            username
+          }));
+        } catch (error) {
+          console.warn("Unable to cache user information.", error);
+        }
+      }
+
+      function clearCachedUser() {
+        try {
+          localStorage.removeItem(USER_CACHE_KEY);
+        } catch (error) {
+          console.warn("Unable to clear cached user information.", error);
+        }
+      }
 
       function closeMessageDialog(result) {
         const resolve = resolveMessageDialog;
@@ -196,8 +243,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         return user;
       }
 
-      async function loadOrCreateUserProfile() {
-        const user = await getAuthenticatedUser();
+      async function loadOrCreateUserProfile(user) {
         const { data: existingProfile, error } = await supabaseClient
           .from("users")
           .select("*")
@@ -557,6 +603,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           currentUsername = "";
           currentAvatarUrl = null;
           userDisplay.textContent = "";
+          clearCachedUser();
           renderUserAvatar(null);
           mainApp.hidden = true;
           authScreen.hidden = false;
@@ -566,20 +613,30 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
+        const cachedProfile = readCachedUser();
+        const matchesCachedEmail = cachedProfile &&
+          cachedProfile.email.toLowerCase() === currentUser.email?.toLowerCase();
+        currentUsername = matchesCachedEmail ? cachedProfile.username : "";
+        userDisplay.textContent = currentUsername;
+        if (currentUsername) {
+          workLogForm.elements.namedItem("author").value = currentUsername;
+        }
         authScreen.hidden = true;
         mainApp.hidden = false;
         try {
-          const profile = await loadOrCreateUserProfile();
-          currentUsername = profile.username;
+          currentUser = await getAuthenticatedUser();
+          const profile = await loadOrCreateUserProfile(currentUser);
+          currentUsername = profile.username || currentUser.email?.split("@")[0] || currentUser.id;
           currentAvatarUrl = profile.avatar_url || null;
           userDisplay.textContent = currentUsername;
           renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
+          cacheUser(currentUser, currentUsername);
           await refreshWorkLogs();
           switchPage("page-dashboard");
         } catch (error) {
           console.error("Unable to initialize user profile or load work logs from Supabase.", error);
-          currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
+          currentUsername = currentUsername || currentUser.email?.split("@")[0] || currentUser.id;
           userDisplay.textContent = currentUsername;
           renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
@@ -951,6 +1008,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           currentUsername = newUsername;
           userDisplay.textContent = newUsername;
           workLogForm.elements.namedItem("author").value = currentUsername;
+          cacheUser(user, currentUsername);
           workLogs = workLogs.map((log) => ({
             ...log,
             users: log.author_uuid === currentUser.id ? { username: currentUsername } : log.users

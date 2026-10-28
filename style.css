@@ -768,22 +768,22 @@
       }
 
       .specification-panel {
-        width: min(1120px, 100%);
+        width: min(1080px, 100%);
         margin: 0 auto;
-        padding: clamp(24px, 4vw, 46px);
+        padding: clamp(24px, 4vw, 44px);
         border: 1px solid rgba(255, 255, 255, .72);
         border-radius: 20px;
-        background: #f8f9fa;
+        background: rgba(248, 249, 250, .96);
         box-shadow: 0 18px 48px rgba(42, 54, 57, .1);
       }
 
       .specification-header {
-        margin-bottom: 27px;
+        margin-bottom: 30px;
       }
 
       .specification-header .page-title {
         color: #203b50;
-        font-size: 36px;
+        font-size: clamp(30px, 4vw, 38px);
         font-weight: 800;
         letter-spacing: -.055em;
       }
@@ -796,44 +796,59 @@
 
       .specification-layout {
         display: grid;
-        grid-template-columns: minmax(230px, .78fr) minmax(0, 1.7fr);
-        align-items: start;
-        gap: 22px;
-      }
-
-      .specification-column {
-        display: grid;
         gap: 18px;
-        min-width: 0;
       }
 
       .specification-card {
-        padding: 21px;
+        min-width: 0;
+        padding: clamp(18px, 2.5vw, 25px);
         border: 1px solid #e7eaed;
-        border-radius: 13px;
+        border-radius: 15px;
         background: #fff;
-        box-shadow: 0 5px 16px rgba(38, 53, 61, .045);
+        box-shadow: 0 8px 22px rgba(38, 53, 61, .045);
       }
 
-      .specification-card h2 {
-        margin: 0 0 7px;
+      .specification-section-heading {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .specification-section-number {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 12px;
+        background: #eaf1f6;
+        color: #355a78;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .04em;
+      }
+
+      .specification-card h2,
+      .future-note h2 {
+        margin: 0 0 5px;
         color: #203b50;
-        font-size: 17px;
-        font-weight: 750;
+        font-size: 18px;
+        font-weight: 800;
         letter-spacing: -.025em;
       }
 
       .specification-card__subtitle {
-        margin: 0 0 18px;
+        margin: 0;
         color: #868e96;
-        font-size: 11px;
+        font-size: 12px;
         line-height: 1.6;
       }
 
       .specification-card p,
-      .specification-card li {
+      .future-note p {
         color: #495057;
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.8;
       }
 
@@ -842,124 +857,118 @@
       }
 
       .practice-card {
-        min-height: 100%;
         border-top: 3px solid #355a78;
       }
 
       .practice-period {
         display: inline-flex;
-        margin-bottom: 19px;
-        padding: 6px 10px;
+        margin-bottom: 8px;
+        padding: 5px 9px;
         border-radius: 999px;
         background: #eaf1f6;
         color: #355a78;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
       }
 
+      .practice-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+        align-items: stretch;
+        gap: 22px;
+      }
+
       .practice-goal {
-        margin-top: 18px !important;
-        padding-top: 16px;
-        border-top: 1px solid #e8ebed;
+        padding: 15px 17px;
+        border: 1px solid #e5edf2;
+        border-radius: 12px;
+        background: #f5f8fa;
       }
 
       .practice-goal strong {
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 7px;
         color: #203b50;
-        font-size: 11px;
+        font-size: 12px;
       }
 
       .page-standard-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+        gap: 13px;
       }
 
       .page-standard-card {
-        min-height: 136px;
-        padding: 17px;
+        position: relative;
+        min-height: 145px;
+        padding: 19px;
         border: 1px solid #e7eaed;
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: 0 5px 16px rgba(38, 53, 61, .04);
+        border-radius: 13px;
+        background: linear-gradient(145deg, #fff, #f8fafb);
+        transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+      }
+
+      .page-standard-card:hover {
+        transform: translateY(-2px);
+        border-color: #c9d8e2;
+        box-shadow: 0 10px 24px rgba(38, 53, 61, .08);
+      }
+
+      .page-standard-card__number {
+        display: inline-block;
+        margin-bottom: 13px;
+        color: #7892a5;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .12em;
       }
 
       .page-standard-card h3 {
-        margin: 0 0 9px;
+        margin: 0 0 8px;
         color: #203b50;
-        font-size: 13px;
-        font-weight: 750;
-        line-height: 1.5;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.55;
       }
 
       .page-standard-card p {
         margin: 0;
         color: #495057;
-        font-size: 11px;
-        line-height: 1.75;
+        font-size: 12px;
+        line-height: 1.8;
       }
 
       .future-note {
-        padding: 18px 19px;
+        padding: clamp(18px, 2.5vw, 25px);
         border: 1px solid #dfeaf2;
-        border-left: 4px solid #527b9b;
-        border-radius: 10px;
+        border-radius: 15px;
         background: #edf5fa;
-      }
-
-      .future-note h2 {
-        margin: 0 0 9px;
-        color: #203b50;
-        font-size: 14px;
-        font-weight: 750;
       }
 
       .future-note__columns {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
+        gap: 14px;
+      }
+
+      .future-note__item {
+        padding: 16px 18px;
+        border: 1px solid rgba(82, 123, 155, .16);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, .72);
       }
 
       .future-note h3 {
-        margin: 0 0 5px;
+        margin: 0 0 7px;
         color: #355a78;
-        font-size: 11px;
+        font-size: 12px;
+        font-weight: 800;
       }
 
       .future-note p {
         margin: 0;
-        color: #495057;
-        font-size: 11px;
-        line-height: 1.7;
-      }
-
-      .checklist-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px 14px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .checklist-grid li {
-        position: relative;
-        min-height: 34px;
-        padding-left: 23px;
-        color: #495057;
-        font-size: 11px;
-        line-height: 1.6;
-      }
-
-      .checklist-grid li::before {
-        position: absolute;
-        top: 0;
-        left: 0;
-        color: #527b9b;
-        content: "□";
-        font-size: 16px;
-        line-height: 1.1;
+        font-size: 12px;
+        line-height: 1.8;
       }
 
       .visually-hidden {
@@ -1374,7 +1383,7 @@
           grid-template-columns: 1fr;
         }
 
-        .specification-layout {
+        .practice-content {
           grid-template-columns: 1fr;
         }
 
@@ -1459,7 +1468,6 @@
         }
 
         .page-standard-grid,
-        .checklist-grid,
         .future-note__columns {
           grid-template-columns: 1fr;
         }
