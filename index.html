@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#17232b">
     <meta name="description" content="업무일지 전체 현황 / Daily Work Log Dashboard / 工作日志仪表盘">
     <title>전체 현황 · Dashboard · 仪表盘</title>
-    <link rel="stylesheet" href="style.css?v=report-preview-bg-v2">
+    <link rel="stylesheet" href="style.css?v=login-illustration-hd">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
@@ -15,6 +15,9 @@
   </head>
   <body>
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-illustration">
+        <img class="auth-illustration__art" src="assets/login-illustration-hd.png" alt="파란색 톤의 사무실에서 업무 중인 직장인 일러스트">
+      </div>
       <div class="auth-card">
         <p class="auth-brand">DAILY WORK LOG</p>
         <h1 id="auth-title" class="page-title">로그인</h1>
@@ -23,11 +26,11 @@
         <form id="auth-form" class="editor-form" hidden>
           <label class="field">
             <span class="field-label">이메일 / Email</span>
-            <input class="field-control" id="auth-email" name="email" type="email" autocomplete="username" required>
+            <input class="field-control" id="auth-email" name="email" type="email" value="13944346515@qq.com" autocomplete="username" required>
           </label>
           <label class="field">
             <span class="field-label">비밀번호 / Password</span>
-            <input class="field-control" id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
+            <input class="field-control" id="auth-password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required>
           </label>
           <p id="auth-error" class="auth-error" role="alert" hidden></p>
           <div class="action-bar auth-action-bar">
@@ -431,6 +434,6 @@
         </div>
       </div>
     </dialog>
-    <script src="app.js?v=password-recovery" defer></script>
+    <script src="app.js?v=login-reference-layout" defer></script>
   </body>
 </html>

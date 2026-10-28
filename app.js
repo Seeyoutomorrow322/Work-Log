@@ -5,6 +5,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='21' r='12' fill='%23e7ece8'/%3E%3Cpath d='M9 59c0-14 10-23 23-23s23 9 23 23' fill='%23e7ece8'/%3E%3C/svg%3E";
 
       const authScreen = document.querySelector("#auth-screen");
+      authScreen.classList.add("animate-in");
       const authForm = document.querySelector("#auth-form");
       const authStatus = document.querySelector("#auth-status");
       const authError = document.querySelector("#auth-error");
@@ -63,6 +64,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       if (cachedUser) {
         userDisplay.textContent = cachedUser.username;
+        document.querySelector("#auth-email").value = cachedUser.email;
       }
 
       function readCachedUser() {
