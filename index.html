@@ -30,7 +30,8 @@
             <input class="field-control" id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
           </label>
           <p id="auth-error" class="auth-error" role="alert" hidden></p>
-          <div class="action-bar">
+          <div class="action-bar auth-action-bar">
+            <button id="forgot-password-button" class="action-button action-button--secondary" type="button" hidden>비밀번호 찾기</button>
             <button id="login-button" class="action-button action-button--primary" type="submit">로그인</button>
             <button id="signup-button" class="action-button action-button--secondary" type="button">계정 만들기</button>
           </div>
@@ -38,6 +39,21 @@
       </div>
     </section>
     <p id="auth-success-toast" class="auth-success-toast" role="status" aria-live="polite" hidden></p>
+    <dialog id="reset-email-dialog" class="message-dialog" aria-labelledby="reset-email-title">
+      <form id="reset-email-form" class="message-dialog-content">
+        <h2 id="reset-email-title">비밀번호 찾기</h2>
+        <p>비밀번호 재설정 링크를 받을 이메일 주소를 입력하세요.</p>
+        <label class="field" for="reset-email">
+          <span class="field-label">이메일</span>
+          <input class="field-control" id="reset-email" name="email" type="email" autocomplete="email" required>
+        </label>
+        <p id="reset-email-error" class="auth-error" role="alert" hidden></p>
+        <div class="action-bar">
+          <button id="cancel-reset-email" class="action-button action-button--secondary" type="button">취소</button>
+          <button id="send-reset-email" class="action-button action-button--primary" type="submit">링크 보내기</button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="main-app" class="app-shell" hidden>
       <aside class="sidebar">
@@ -412,6 +428,6 @@
         </div>
       </div>
     </dialog>
-    <script src="app.js?v=profile-menu-hover" defer></script>
+    <script src="app.js?v=password-recovery" defer></script>
   </body>
 </html>

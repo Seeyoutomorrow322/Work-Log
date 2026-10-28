@@ -573,6 +573,15 @@
         padding-top: 5px;
       }
 
+      .auth-action-bar {
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .auth-action-bar .action-button {
+        flex: 0 0 auto;
+      }
+
       .action-button,
       .back-button {
         display: inline-flex;
@@ -1343,6 +1352,21 @@
         .action-button {
           flex: 1 1 145px;
           padding: 0 10px;
+          font-size: 10px;
+        }
+
+        .auth-card {
+          padding: 20px;
+        }
+
+        .auth-action-bar {
+          flex-wrap: nowrap;
+          gap: 6px;
+        }
+
+        .auth-action-bar .action-button {
+          flex: 0 0 auto;
+          padding: 0 6px;
           font-size: 10px;
         }
 

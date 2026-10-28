@@ -9,6 +9,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       const authStatus = document.querySelector("#auth-status");
       const authError = document.querySelector("#auth-error");
       const authSuccessToast = document.querySelector("#auth-success-toast");
+      const forgotPasswordButton = document.querySelector("#forgot-password-button");
+      const resetEmailDialog = document.querySelector("#reset-email-dialog");
+      const resetEmailForm = document.querySelector("#reset-email-form");
+      const resetEmailInput = document.querySelector("#reset-email");
+      const resetEmailError = document.querySelector("#reset-email-error");
+      const sendResetEmailButton = document.querySelector("#send-reset-email");
       const mainApp = document.querySelector("#main-app");
       const userDisplay = document.querySelector("#userDisplay");
       const userProfileContainer = document.querySelector("#userProfileCard");
@@ -40,6 +46,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         learning: "learning",
         tomorrowPlan: "tomorrow_plan"
       };
+      const workLogSelect = "*, author_uuid:user_id";
       let currentUser = null;
       let currentUsername = "";
       let currentAvatarUrl = null;
@@ -103,11 +110,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         image.src = avatarUrl || DEFAULT_AVATAR_SRC;
       }
 
-      function toWorkLog(row) {
-        const log = { ...row };
-        if (row.author === currentUser?.id) {
-          log.author = currentUsername || currentUser.email || row.author;
-        }
+      function toWorkLog(row, userProfile) {
+        const log = {
+          ...row,
+          users: userProfile ? { username: userProfile.username } : null
+        };
         Object.entries(workLogFieldMap).forEach(([formField, databaseField]) => {
           log[formField] = row[databaseField] ?? "";
           if (databaseField !== formField) {
@@ -130,15 +137,33 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         return row;
       }
 
+      async function attachWorkLogUsers(rows) {
+        const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+        let profilesByUserId = new Map();
+
+        if (userIds.length > 0) {
+          const { data: profiles, error } = await supabaseClient
+            .from("users")
+            .select("user_id, username")
+            .in("user_id", userIds);
+          if (error) {
+            throw error;
+          }
+          profilesByUserId = new Map(profiles.map((profile) => [profile.user_id, profile]));
+        }
+
+        return rows.map((row) => toWorkLog(row, profilesByUserId.get(row.user_id)));
+      }
+
       async function loadWorkLogs() {
         const { data, error } = await supabaseClient
           .from("work_logs")
-          .select("*")
+          .select(workLogSelect)
           .order("date", { ascending: false });
         if (error) {
           throw error;
         }
-        return data.map(toWorkLog);
+        return attachWorkLogUsers(data);
       }
 
       async function refreshWorkLogs() {
@@ -229,7 +254,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         const meta = document.createElement("div");
         meta.className = "report-meta";
         [
-          ["작성자", log.author],
+          ["작성자", log.users?.username || "未知用户"],
           ["작성일", log.date],
           ["상태", log.status]
         ].forEach(([label, value]) => {
@@ -395,7 +420,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         const dateCell = document.createElement("td");
         dateCell.textContent = String(log.date || "").replaceAll("-", ".") || "—";
         const authorCell = document.createElement("td");
-        authorCell.textContent = log.author || "—";
+        authorCell.textContent = log.users?.username || "未知用户";
         const workCell = document.createElement("td");
         workCell.textContent = log.completedWork || log.assignedWork || "—";
         const statusCell = document.createElement("td");
@@ -536,6 +561,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           mainApp.hidden = true;
           authScreen.hidden = false;
           authForm.hidden = false;
+          forgotPasswordButton.hidden = false;
           authStatus.textContent = "로그인 후 업무일지를 확인할 수 있습니다.";
           return;
         }
@@ -582,6 +608,48 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           showAuthError(error.message);
         } finally {
           submitButton.disabled = false;
+        }
+      });
+
+      forgotPasswordButton.addEventListener("click", () => {
+        resetEmailError.textContent = "";
+        resetEmailError.hidden = true;
+        resetEmailInput.value = document.querySelector("#auth-email").value.trim();
+        resetEmailDialog.showModal();
+        resetEmailInput.focus();
+      });
+
+      document.querySelector("#cancel-reset-email").addEventListener("click", () => {
+        resetEmailDialog.close();
+      });
+
+      resetEmailForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        resetEmailError.textContent = "";
+        resetEmailError.hidden = true;
+        if (!resetEmailForm.reportValidity()) {
+          return;
+        }
+
+        sendResetEmailButton.disabled = true;
+        try {
+          const redirectTo = new URL("./reset-password.html", window.location.href).href;
+          const { error } = await supabaseClient.auth.resetPasswordForEmail(
+            resetEmailInput.value.trim(),
+            { redirectTo }
+          );
+          if (error) {
+            throw error;
+          }
+
+          resetEmailDialog.close();
+          showAuthSuccess("비밀번호 재설정 링크를 발송했습니다.");
+        } catch (error) {
+          console.error("Supabase password reset email request failed.", error);
+          resetEmailError.textContent = "비밀번호 재설정 링크를 보내지 못했습니다. 이메일 주소를 확인하고 다시 시도해 주세요.";
+          resetEmailError.hidden = false;
+        } finally {
+          sendResetEmailButton.disabled = false;
         }
       });
 
@@ -883,10 +951,13 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           currentUsername = newUsername;
           userDisplay.textContent = newUsername;
           workLogForm.elements.namedItem("author").value = currentUsername;
-          workLogs = workLogs.map((log) => ({ ...log, author: currentUsername }));
+          workLogs = workLogs.map((log) => ({
+            ...log,
+            users: log.author_uuid === currentUser.id ? { username: currentUsername } : log.users
+          }));
           renderTable(workLogs);
-          if (selectedReport?.author) {
-            selectedReport = { ...selectedReport, author: currentUsername };
+          if (selectedReport?.author_uuid === currentUser.id) {
+            selectedReport = { ...selectedReport, users: { username: currentUsername } };
             renderReportPage(selectedReport);
           }
           closeNicknameModal();
@@ -979,18 +1050,18 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
                 .from("work_logs")
                 .update(payload)
                 .eq("id", editingLogId)
-                .select()
+                .select(workLogSelect)
                 .single()
             : await supabaseClient
                 .from("work_logs")
                 .insert(payload)
-                .select()
+                .select(workLogSelect)
                 .single();
           if (error) {
             throw error;
           }
 
-          const savedLog = toWorkLog(data);
+          const [savedLog] = await attachWorkLogUsers([data]);
           editingLogId = null;
           try {
             await refreshWorkLogs();
@@ -1035,7 +1106,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             .from("work_logs")
             .update({ status: "완료" })
             .eq("id", selectedReport.id)
-            .select()
+            .select(workLogSelect)
             .maybeSingle();
           if (error) {
             throw error;
@@ -1045,7 +1116,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             return;
           }
 
-          selectedReport = toWorkLog(data);
+          [selectedReport] = await attachWorkLogUsers([data]);
           await refreshWorkLogs();
           renderReportPage(selectedReport);
           await exportPDF();
