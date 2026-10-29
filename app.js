@@ -558,9 +558,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           targetPage.classList.add("is-active", "is-transitioning", enteringClass);
 
           pageTransitionFrame = window.requestAnimationFrame(() => {
-            pageTransitionFrame = undefined;
-            targetPage.classList.remove(enteringClass);
-            currentPage.classList.add(leavingClass);
+            pageTransitionFrame = window.requestAnimationFrame(() => {
+              pageTransitionFrame = undefined;
+              targetPage.classList.remove(enteringClass);
+              currentPage.classList.add(leavingClass);
+            });
           });
           pageTransitionTimeout = window.setTimeout(
             finishPageTransition,
