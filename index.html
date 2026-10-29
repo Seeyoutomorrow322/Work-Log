@@ -23,14 +23,14 @@
         <h1 id="auth-title" class="page-title">로그인</h1>
         <p class="page-subtitle">Email &amp; Password / 邮箱与密码</p>
         <p id="auth-status" class="auth-status" role="status">로그인 상태를 확인하는 중입니다...</p>
-        <form id="auth-form" class="editor-form" hidden>
+        <form id="auth-form" class="editor-form" novalidate hidden>
           <label class="field">
             <span class="field-label">이메일 / Email</span>
-            <input class="field-control" id="auth-email" name="email" type="email" value="13944346515@qq.com" autocomplete="username" required>
+            <input class="field-control" id="auth-email" name="email" type="email" autocomplete="off" required>
           </label>
           <label class="field">
             <span class="field-label">비밀번호 / Password</span>
-            <input class="field-control" id="auth-password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required>
+            <input class="field-control" id="auth-password" name="password" type="password" autocomplete="off" minlength="6" required>
           </label>
           <p id="auth-error" class="auth-error" role="alert" hidden></p>
           <div class="action-bar auth-action-bar">

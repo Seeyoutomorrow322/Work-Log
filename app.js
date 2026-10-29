@@ -49,6 +49,10 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       };
       const workLogSelect = "*, author_uuid:user_id";
       const USER_CACHE_KEY = "work-log-user";
+      const PAGE_SLIDE_DURATION = 500;
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let pageTransitionTimeout;
+      let pageTransitionFrame;
       let currentUser = null;
       let currentUsername = "";
       let currentAvatarUrl = null;
@@ -64,7 +68,6 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       if (cachedUser) {
         userDisplay.textContent = cachedUser.username;
-        document.querySelector("#auth-email").value = cachedUser.email;
       }
 
       function readCachedUser() {
@@ -524,9 +527,49 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
+        finishPageTransition();
+        const currentPage = document.querySelector(".page-content.is-active");
         renderTable(workLogs);
-        pageContents.forEach((page) => page.classList.remove("is-active"));
-        targetPage.classList.add("is-active");
+
+        const currentPageIndex = Array.from(navigationItems).findIndex(
+          (item) => item.dataset.navTarget === currentPage?.id
+        );
+        const targetPageIndex = Array.from(navigationItems).findIndex(
+          (item) => item.dataset.navTarget === pageId
+        );
+        const shouldSlide =
+          currentPage &&
+          currentPage !== targetPage &&
+          currentPageIndex !== -1 &&
+          targetPageIndex !== -1 &&
+          !prefersReducedMotion.matches;
+
+        if (shouldSlide) {
+          const movingUp = targetPageIndex < currentPageIndex;
+          const enteringClass = movingUp
+            ? "is-entering-from-top"
+            : "is-entering-from-bottom";
+          const leavingClass = movingUp
+            ? "is-leaving-to-bottom"
+            : "is-leaving-to-top";
+
+          currentPage.classList.remove("is-active");
+          currentPage.classList.add("is-transitioning");
+          targetPage.classList.add("is-active", "is-transitioning", enteringClass);
+
+          pageTransitionFrame = window.requestAnimationFrame(() => {
+            pageTransitionFrame = undefined;
+            targetPage.classList.remove(enteringClass);
+            currentPage.classList.add(leavingClass);
+          });
+          pageTransitionTimeout = window.setTimeout(
+            finishPageTransition,
+            PAGE_SLIDE_DURATION + 50
+          );
+        } else {
+          pageContents.forEach((page) => page.classList.remove("is-active"));
+          targetPage.classList.add("is-active");
+        }
 
         navigationItems.forEach((item) => {
           if (item.dataset.navTarget === pageId) {
@@ -545,6 +588,22 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           document.title = `${title} · 업무일지`;
         }
         window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function finishPageTransition() {
+        window.clearTimeout(pageTransitionTimeout);
+        window.cancelAnimationFrame(pageTransitionFrame);
+        pageTransitionTimeout = undefined;
+        pageTransitionFrame = undefined;
+        pageContents.forEach((page) => {
+          page.classList.remove(
+            "is-transitioning",
+            "is-entering-from-top",
+            "is-entering-from-bottom",
+            "is-leaving-to-top",
+            "is-leaving-to-bottom"
+          );
+        });
       }
 
       document.querySelectorAll("[data-nav-target]").forEach((item) => {
@@ -584,6 +643,66 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         }, 3000);
       }
 
+      function getAuthValidationMessage() {
+        const emailInput = document.querySelector("#auth-email");
+        const passwordInput = document.querySelector("#auth-password");
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!email) {
+          emailInput.focus();
+          return "이메일을 입력해 주세요.";
+        }
+        if (!emailInput.checkValidity()) {
+          emailInput.focus();
+          return "올바른 이메일 주소를 입력해 주세요.";
+        }
+        if (!password) {
+          passwordInput.focus();
+          return "비밀번호를 입력해 주세요.";
+        }
+        if (password.length < 6) {
+          passwordInput.focus();
+          return "비밀번호는 6자 이상 입력해 주세요.";
+        }
+        return "";
+      }
+
+      function slideOutAuthScreen() {
+        authScreen.classList.remove("animate-in");
+        authScreen.classList.add("slide-out-left");
+      }
+
+      function slideInMainApp() {
+        authScreen.hidden = true;
+        authScreen.classList.remove("slide-out-left");
+        mainApp.hidden = false;
+        mainApp.classList.add("slide-in-from-right");
+
+        const finishTransition = () => {
+          mainApp.classList.remove("slide-in-from-right");
+          document.body.classList.remove("is-page-transitioning");
+        };
+        mainApp.addEventListener("animationend", finishTransition, { once: true });
+        window.setTimeout(finishTransition, PAGE_SLIDE_DURATION + 100);
+      }
+
+      // 로그인 성공 시: 로그인 화면이 왼쪽으로 빠져나간 뒤 대시보드가 오른쪽에서 들어옵니다.
+      function playLoginTransition() {
+        const slideDuration = prefersReducedMotion.matches ? 0 : PAGE_SLIDE_DURATION;
+        document.body.classList.add("is-page-transitioning");
+        slideOutAuthScreen();
+        window.setTimeout(slideInMainApp, slideDuration);
+      }
+
+      function resetAuthScreenState() {
+        authScreen.hidden = false;
+        authScreen.classList.remove("slide-out-left");
+        authScreen.classList.add("animate-in");
+        mainApp.classList.remove("slide-in-from-right");
+        document.body.classList.remove("is-page-transitioning");
+      }
+
       async function applyAuthSession(session) {
         const nextUser = session?.user ?? null;
         if (currentUser?.id !== nextUser?.id) {
@@ -608,7 +727,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           clearCachedUser();
           renderUserAvatar(null);
           mainApp.hidden = true;
-          authScreen.hidden = false;
+          resetAuthScreenState();
           authForm.hidden = false;
           forgotPasswordButton.hidden = false;
           authStatus.textContent = "로그인 후 업무일지를 확인할 수 있습니다.";
@@ -623,8 +742,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (currentUsername) {
           workLogForm.elements.namedItem("author").value = currentUsername;
         }
-        authScreen.hidden = true;
-        mainApp.hidden = false;
+        if (mainApp.hidden && !authScreen.hidden) {
+          playLoginTransition();
+        } else {
+          authScreen.hidden = true;
+          mainApp.hidden = false;
+        }
         try {
           currentUser = await getAuthenticatedUser();
           const profile = await loadOrCreateUserProfile(currentUser);
@@ -651,6 +774,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       authForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         showAuthError("");
+        const validationMessage = getAuthValidationMessage();
+        if (validationMessage) {
+          showAuthError(validationMessage);
+          return;
+        }
         const submitButton = document.querySelector("#login-button");
         submitButton.disabled = true;
         const { email, password } = Object.fromEntries(new FormData(authForm).entries());
@@ -714,11 +842,13 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       document.querySelector("#signup-button").addEventListener("click", async () => {
         showAuthError("");
-        const email = document.querySelector("#auth-email").value.trim();
-        const password = document.querySelector("#auth-password").value;
-        if (!authForm.reportValidity()) {
+        const validationMessage = getAuthValidationMessage();
+        if (validationMessage) {
+          showAuthError(validationMessage);
           return;
         }
+        const email = document.querySelector("#auth-email").value.trim();
+        const password = document.querySelector("#auth-password").value;
 
         const signupButton = document.querySelector("#signup-button");
         signupButton.disabled = true;
