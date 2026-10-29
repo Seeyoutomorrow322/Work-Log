@@ -760,7 +760,6 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           workLogForm.elements.namedItem("author").value = currentUsername;
           cacheUser(currentUser, currentUsername);
           await refreshWorkLogs();
-          switchPage("page-dashboard");
         } catch (error) {
           console.error("Unable to initialize user profile or load work logs from Supabase.", error);
           currentUsername = currentUsername || currentUser.email?.split("@")[0] || currentUser.id;
