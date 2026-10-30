@@ -1,6 +1,9 @@
 const SUPABASE_URL = "https://hdwkxlynuyunggrgvkvu.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XiDSi6k6FDHr9D56c1a7TA_eQidQJ7w";
 
+if (!window.supabase || typeof window.supabase.createClient !== "function") {
+  window.showSupabaseSdkError?.();
+} else {
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='21' r='12' fill='%23e7ece8'/%3E%3Cpath d='M9 59c0-14 10-23 23-23s23 9 23 23' fill='%23e7ece8'/%3E%3C/svg%3E";
 
@@ -231,6 +234,13 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           String(today.getMonth() + 1).padStart(2, "0"),
           String(today.getDate()).padStart(2, "0")
         ].join("-");
+      }
+
+      function resetWorkLogEditor() {
+        editingLogId = null;
+        workLogForm.reset();
+        dateInput.value = getToday();
+        workLogForm.elements.namedItem("author").value = currentUsername;
       }
 
       function getWorkLogData() {
@@ -618,6 +628,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       document.querySelectorAll("[data-page-target]").forEach((item) => {
         item.addEventListener("click", (event) => {
           event.preventDefault();
+          if (item.matches(".create-button") && item.dataset.pageTarget === "page-editor") {
+            resetWorkLogEditor();
+          }
           switchPage(item.dataset.pageTarget);
         });
       });
@@ -1180,7 +1193,13 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
         window.setTimeout(() => {
-          void applyAuthSession(session);
+          void applyAuthSession(session).catch((error) => {
+            console.error("Unexpected auth session handling failure.", error);
+            authForm.hidden = false;
+            mainApp.hidden = true;
+            authScreen.hidden = false;
+            authStatus.textContent = "로그인 상태를 처리하지 못했습니다. 페이지를 새로고침해 주세요.";
+          });
         }, 0);
       });
 
@@ -1199,17 +1218,27 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           }
 
           try {
-            const { error } = await supabaseClient
+            const { data: deletedLog, error } = await supabaseClient
               .from("work_logs")
               .delete()
-              .eq("id", logId);
+              .eq("id", logId)
+              .select("id")
+              .maybeSingle();
             if (error) {
               throw error;
             }
-            await refreshWorkLogs();
+            if (!deletedLog) {
+              throw new Error("삭제 권한이 없거나 업무일지가 삭제되지 않았습니다.");
+            }
+            try {
+              await refreshWorkLogs();
+            } catch (refreshError) {
+              console.error("Work log was deleted, but the list could not be refreshed.", refreshError);
+              await showMessage(`업무일지는 삭제되었지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
+            }
           } catch (error) {
             console.error("Unable to delete work log.", error);
-            await showMessage(`업무일지를 삭제하지 못했습니다: ${error.message}`);
+            await showMessage(`삭제 실패: ${error.message || "업무일지를 삭제하지 못했습니다. 권한을 확인해 주세요."}`);
             return;
           }
           return;
@@ -1252,8 +1281,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             throw error;
           }
 
-          const [savedLog] = await attachWorkLogUsers([data]);
-          editingLogId = null;
+          const savedLog = toWorkLog(data, { username: currentUsername });
+          resetWorkLogEditor();
           try {
             await refreshWorkLogs();
           } catch (refreshError) {
@@ -1281,6 +1310,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       document.querySelector("#cancel-button").addEventListener("click", () => {
+        resetWorkLogEditor();
         switchPage("page-dashboard");
       });
 
@@ -1340,3 +1370,4 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       renderTable();
+}

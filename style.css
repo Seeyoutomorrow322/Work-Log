@@ -56,6 +56,23 @@
         display: none !important;
       }
 
+      .dependency-error-banner {
+        position: fixed;
+        z-index: 100;
+        top: 0;
+        right: 0;
+        left: 0;
+        margin: 0;
+        padding: 14px 20px;
+        background: #a32222;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.5;
+        text-align: center;
+        box-shadow: 0 4px 16px rgba(80, 0, 0, .28);
+      }
+
       .auth-screen {
         position: relative;
         display: flex;

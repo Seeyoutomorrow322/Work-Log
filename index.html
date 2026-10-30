@@ -14,6 +14,19 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@latest/dist/jspdf.umd.min.js" defer></script>
   </head>
   <body>
+    <p id="supabase-sdk-error" class="dependency-error-banner" role="alert" hidden>
+      Supabase 연결 스크립트를 불러오지 못했습니다. 페이지를 새로고침하거나 네트워크 연결을 확인해 주세요.
+    </p>
+    <script>
+      window.showSupabaseSdkError = () => {
+        document.querySelector("#supabase-sdk-error").hidden = false;
+      };
+      window.addEventListener("DOMContentLoaded", () => {
+        if (!window.supabase || typeof window.supabase.createClient !== "function") {
+          window.showSupabaseSdkError();
+        }
+      }, { once: true });
+    </script>
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-illustration">
         <img class="auth-illustration__art" src="assets/login-illustration-hd.png" alt="파란색 톤의 사무실에서 업무 중인 직장인 일러스트">
