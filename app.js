@@ -51,15 +51,17 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         tomorrowPlan: "tomorrow_plan"
       };
       const workLogSelect = "*, author_uuid:user_id";
-      const USER_CACHE_KEY = "work-log-user";
+      const AUTH_CHANGE_KEY = "auth_change";
       const PAGE_SLIDE_DURATION = 500;
       const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       let pageTransitionTimeout;
       let pageTransitionFrame;
+      let authSessionRequestId = 0;
       let currentUser = null;
       let currentUsername = "";
       let currentAvatarUrl = null;
       let workLogs = [];
+      let workLogRequestId = 0;
       let selectedReport = null;
       let editingLogId = null;
       let isUpdatingPassword = false;
@@ -67,52 +69,6 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
-      const cachedUser = readCachedUser();
-
-      if (cachedUser) {
-        userDisplay.textContent = cachedUser.username;
-      }
-
-      function readCachedUser() {
-        try {
-          const cachedValue = localStorage.getItem(USER_CACHE_KEY);
-          if (!cachedValue) {
-            return null;
-          }
-          const user = JSON.parse(cachedValue);
-          if (typeof user.email !== "string" || typeof user.username !== "string" ||
-              !user.email.trim() || !user.username.trim()) {
-            localStorage.removeItem(USER_CACHE_KEY);
-            return null;
-          }
-          return { email: user.email, username: user.username };
-        } catch (error) {
-          console.warn("Unable to read cached user information.", error);
-          return null;
-        }
-      }
-
-      function cacheUser(user, username) {
-        if (!user?.email || !username) {
-          return;
-        }
-        try {
-          localStorage.setItem(USER_CACHE_KEY, JSON.stringify({
-            email: user.email,
-            username
-          }));
-        } catch (error) {
-          console.warn("Unable to cache user information.", error);
-        }
-      }
-
-      function clearCachedUser() {
-        try {
-          localStorage.removeItem(USER_CACHE_KEY);
-        } catch (error) {
-          console.warn("Unable to clear cached user information.", error);
-        }
-      }
 
       function closeMessageDialog(result) {
         const resolve = resolveMessageDialog;
@@ -222,9 +178,38 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function refreshWorkLogs() {
-        workLogs = await loadWorkLogs();
+        const requestedUserId = currentUser?.id;
+        const requestId = ++workLogRequestId;
+        if (!requestedUserId) {
+          workLogs = [];
+          renderTable(workLogs);
+          return workLogs;
+        }
+
+        const loadedWorkLogs = await loadWorkLogs();
+        if (currentUser?.id !== requestedUserId || requestId !== workLogRequestId) {
+          return workLogs;
+        }
+        workLogs = loadedWorkLogs;
         renderTable(workLogs);
         return workLogs;
+      }
+
+      function clearUserScopedData() {
+        workLogRequestId += 1;
+        currentUser = null;
+        currentUsername = "";
+        currentAvatarUrl = null;
+        workLogs = [];
+        selectedReport = null;
+        editingLogId = null;
+        userDisplay.textContent = "";
+        renderUserAvatar(null);
+        closeProfileDropdown();
+        workLogForm.reset();
+        workLogForm.elements.namedItem("author").value = "";
+        renderTable(workLogs);
+        renderReportPage(null);
       }
 
       function getToday() {
@@ -492,17 +477,19 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         statusCell.append(status);
 
         const actionsCell = document.createElement("td");
-        const viewButton = document.createElement("button");
-        viewButton.className = "view-link";
-        viewButton.type = "button";
-        viewButton.dataset.viewLog = String(log.id);
-        viewButton.textContent = "보기";
-        const deleteButton = document.createElement("button");
-        deleteButton.className = "btn-delete";
-        deleteButton.type = "button";
-        deleteButton.dataset.id = String(log.id);
-        deleteButton.textContent = "삭제";
-        actionsCell.append(viewButton, deleteButton);
+        if (currentUser?.id && log.user_id === currentUser.id) {
+          const viewButton = document.createElement("button");
+          viewButton.className = "view-link";
+          viewButton.type = "button";
+          viewButton.dataset.viewLog = String(log.id);
+          viewButton.textContent = "보기";
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "btn-delete";
+          deleteButton.type = "button";
+          deleteButton.dataset.id = String(log.id);
+          deleteButton.textContent = "삭제";
+          actionsCell.append(viewButton, deleteButton);
+        }
 
         row.append(dateCell, authorCell, workCell, statusCell, actionsCell);
         return row;
@@ -535,6 +522,25 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (!targetPage || !targetPage.classList.contains("page-content")) {
           console.error(`Unknown page: ${pageId}`);
           return;
+        }
+
+        if (!currentUser) {
+          clearUserScopedData();
+          mainApp.hidden = true;
+          resetAuthScreenState();
+          authForm.hidden = false;
+          forgotPasswordButton.hidden = false;
+          authStatus.textContent = "로그인 후 업무일지를 확인할 수 있습니다.";
+          return;
+        }
+
+        if (pageId === "page-dashboard" && currentUser) {
+          workLogs = [];
+          renderTable(workLogs);
+          void refreshWorkLogs().catch(async (error) => {
+            console.error("Unable to refresh dashboard work logs.", error);
+            await showMessage(`업무일지를 불러오지 못했습니다: ${error.message}`);
+          });
         }
 
         finishPageTransition();
@@ -718,29 +724,16 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         document.body.classList.remove("is-page-transitioning");
       }
 
-      async function applyAuthSession(session) {
-        const nextUser = session?.user ?? null;
-        if (currentUser?.id !== nextUser?.id) {
-          workLogs = [];
-          selectedReport = null;
-          currentUsername = "";
-          currentAvatarUrl = null;
-          userDisplay.textContent = "";
-          renderUserAvatar(null);
-          closeProfileDropdown();
-          renderTable(workLogs);
+      async function applyAuthSession(session, requestId = ++authSessionRequestId) {
+        const nextUser = session?.user ? await getAuthenticatedUser() : null;
+        if (requestId !== authSessionRequestId) {
+          return;
         }
+        clearUserScopedData();
         currentUser = nextUser;
         showAuthError("");
 
         if (!currentUser) {
-          workLogs = [];
-          selectedReport = null;
-          currentUsername = "";
-          currentAvatarUrl = null;
-          userDisplay.textContent = "";
-          clearCachedUser();
-          renderUserAvatar(null);
           mainApp.hidden = true;
           resetAuthScreenState();
           authForm.hidden = false;
@@ -749,14 +742,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
-        const cachedProfile = readCachedUser();
-        const matchesCachedEmail = cachedProfile &&
-          cachedProfile.email.toLowerCase() === currentUser.email?.toLowerCase();
-        currentUsername = matchesCachedEmail ? cachedProfile.username : "";
+        currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
         userDisplay.textContent = currentUsername;
-        if (currentUsername) {
-          workLogForm.elements.namedItem("author").value = currentUsername;
-        }
+        workLogForm.elements.namedItem("author").value = currentUsername;
         if (mainApp.hidden && !authScreen.hidden) {
           playLoginTransition();
         } else {
@@ -764,16 +752,20 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           mainApp.hidden = false;
         }
         try {
-          currentUser = await getAuthenticatedUser();
           const profile = await loadOrCreateUserProfile(currentUser);
+          if (requestId !== authSessionRequestId || currentUser?.id !== nextUser.id) {
+            return;
+          }
           currentUsername = profile.username || currentUser.email?.split("@")[0] || currentUser.id;
           currentAvatarUrl = profile.avatar_url || null;
           userDisplay.textContent = currentUsername;
           renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
-          cacheUser(currentUser, currentUsername);
           await refreshWorkLogs();
         } catch (error) {
+          if (requestId !== authSessionRequestId) {
+            return;
+          }
           console.error("Unable to initialize user profile or load work logs from Supabase.", error);
           currentUsername = currentUsername || currentUser.email?.split("@")[0] || currentUser.id;
           userDisplay.textContent = currentUsername;
@@ -1154,7 +1146,6 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           currentUsername = newUsername;
           userDisplay.textContent = newUsername;
           workLogForm.elements.namedItem("author").value = currentUsername;
-          cacheUser(user, currentUsername);
           workLogs = workLogs.map((log) => ({
             ...log,
             users: log.author_uuid === currentUser.id ? { username: currentUsername } : log.users
@@ -1181,6 +1172,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           if (error) {
             throw error;
           }
+          clearUserScopedData();
+          try {
+            localStorage.setItem(AUTH_CHANGE_KEY, String(Date.now()));
+          } catch (storageError) {
+            console.warn("Unable to notify other tabs about the auth change.", storageError);
+          }
           await applyAuthSession(null);
         } catch (error) {
           console.error("Supabase sign-out failed.", error);
@@ -1192,8 +1189,20 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (isUpdatingPassword || (isCompletingSignup && event === "SIGNED_IN")) {
           return;
         }
+        const requestId = ++authSessionRequestId;
+        clearUserScopedData();
+        if (!session?.user) {
+          mainApp.hidden = true;
+          resetAuthScreenState();
+          authForm.hidden = false;
+          forgotPasswordButton.hidden = false;
+          authStatus.textContent = "로그인 후 업무일지를 확인할 수 있습니다.";
+        }
         window.setTimeout(() => {
-          void applyAuthSession(session).catch((error) => {
+          void applyAuthSession(session, requestId).catch((error) => {
+            if (requestId !== authSessionRequestId) {
+              return;
+            }
             console.error("Unexpected auth session handling failure.", error);
             authForm.hidden = false;
             mainApp.hidden = true;
@@ -1201,6 +1210,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             authStatus.textContent = "로그인 상태를 처리하지 못했습니다. 페이지를 새로고침해 주세요.";
           });
         }, 0);
+      });
+
+      window.addEventListener("storage", (event) => {
+        if (event.key !== AUTH_CHANGE_KEY || event.newValue === null) {
+          return;
+        }
+        clearUserScopedData();
+        window.location.reload();
       });
 
       document.addEventListener("click", async (event) => {
