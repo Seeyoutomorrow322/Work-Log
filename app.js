@@ -337,42 +337,295 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function exportPDF() {
-        if (typeof window.html2pdf !== "function") {
-          throw new Error("PDF 내보내기 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
+        if (typeof window.html2canvas !== "function") {
+          throw new Error("html2canvas 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
+        }
+        const { jsPDF } = window.jspdf || {};
+        if (typeof jsPDF !== "function") {
+          throw new Error("jsPDF 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
         }
 
-        const reportContent = document.querySelector("#report-content");
-        const bounds = reportContent.getBoundingClientRect();
-        if (bounds.width === 0 || bounds.height === 0) {
-          throw new Error("보고서 화면이 표시되지 않아 PDF를 만들 수 없습니다.");
+        const reportCard = document.querySelector("#report-preview-card");
+        if (!reportCard || !reportCard.querySelector(".report-work-list")) {
+          throw new Error("내보낼 업무일지 내용이 없습니다.");
         }
 
         await document.fonts.ready;
-        const options = {
-          filename: "업무보고서.pdf",
-          image: { type: "jpeg", quality: 0.95 },
-          html2canvas: {
-            backgroundColor: null,
-            scale: 2,
-            useCORS: true,
-            windowWidth: 1024,
-            onclone: (clonedDocument) => {
-              const clonedContent = clonedDocument.querySelector("#report-content");
-              clonedContent.style.background = getComputedStyle(document.querySelector("#page-report")).background;
-              clonedContent.style.display = "block";
-              clonedContent.style.width = "794px";
-              clonedContent.style.minHeight = "0";
-              clonedContent.style.height = "auto";
-              clonedContent.style.margin = "0";
-              clonedContent.style.padding = "24px";
-              clonedContent.style.boxSizing = "border-box";
-              clonedContent.querySelector(".report-actions")?.remove();
-            }
-          },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["css", "legacy"] }
+        const pdf = new jsPDF("p", "mm", "a4");
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const imgWidth = pageWidth - margin * 2;
+        const cssPixelsPerMm = 96 / 25.4;
+        const contentWidthPx = Math.floor(imgWidth * cssPixelsPerMm);
+        const exportContainer = document.createElement("div");
+        const exportClone = reportCard.cloneNode(true);
+        exportContainer.id = "pdf-export-container";
+        Object.assign(exportContainer.style, {
+          position: "fixed",
+          top: "0",
+          left: "0",
+          right: "0",
+          width: "auto",
+          maxWidth: `${contentWidthPx}px`,
+          height: "auto",
+          minHeight: "0",
+          overflow: "visible",
+          visibility: "hidden",
+          backgroundColor: "#fff",
+          margin: "0 auto"
+        });
+
+        exportClone.querySelectorAll("button, .report-actions").forEach((element) => element.remove());
+        exportClone.querySelectorAll(".report-meta-item").forEach((item) => {
+          const label = item.querySelector("strong")?.textContent.trim().normalize("NFC");
+          if (label?.startsWith("상태")) {
+            item.remove();
+          }
+        });
+
+        const setImportantStyles = (element, styles) => {
+          Object.entries(styles).forEach(([property, value]) => {
+            element.style.setProperty(property, value, "important");
+          });
         };
-        await window.html2pdf().set(options).from(reportContent).save();
+        setImportantStyles(exportClone, {
+          position: "static",
+          display: "block",
+          width: "auto",
+          "max-width": "100%",
+          height: "auto",
+          "min-height": "0",
+          "max-height": "none",
+          overflow: "visible",
+          "box-sizing": "border-box",
+          "box-shadow": "none",
+          "border-radius": "16px",
+          border: "0",
+          margin: "0",
+          padding: "28px",
+          background: "#fff"
+        });
+        exportClone.querySelectorAll("*").forEach((element) => {
+          setImportantStyles(element, {
+            "box-sizing": "border-box",
+            "max-width": "100%",
+            overflow: "visible",
+            "box-shadow": "none",
+            "border-radius": "0",
+            "background-color": "#fff",
+            "background-image": "none",
+            "text-align": "left"
+          });
+        });
+
+        const meta = exportClone.querySelector(".report-meta");
+        if (meta) {
+          setImportantStyles(meta, {
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "space-between",
+            gap: "16px",
+            width: "100%",
+            margin: "18px 0 24px",
+            padding: "14px 0",
+            "border-top": "0",
+            "border-bottom": "1px solid #e8ebed"
+          });
+          const metaItems = [...meta.querySelectorAll(".report-meta-item")];
+          metaItems.forEach((item, index) => {
+            setImportantStyles(item, {
+              flex: "1 1 0",
+              "text-align": index === metaItems.length - 1 ? "right" : "left",
+              "font-size": "12px"
+            });
+            const label = item.querySelector("strong");
+            if (label) {
+              label.textContent = `${label.textContent.trim()}:`;
+              setImportantStyles(label, {
+                display: "inline",
+                "margin-right": "6px",
+                color: "#7c878e",
+                "font-size": "11px",
+                "font-weight": "600"
+              });
+            }
+          });
+        }
+        const title = exportClone.querySelector(".report-document-title");
+        if (title) {
+          setImportantStyles(title, {
+            "font-size": "30px",
+            "font-weight": "800",
+            "line-height": "1.3",
+            "padding-bottom": "14px",
+            "border-bottom": "1px solid #e8ebed",
+            "letter-spacing": "-.03em"
+          });
+        }
+        const workList = exportClone.querySelector(".report-work-list");
+        setImportantStyles(workList, {
+          display: "block",
+          width: "100%",
+          margin: "0",
+          "padding-left": "22px"
+        });
+        workList.querySelectorAll("li").forEach((item) => {
+          setImportantStyles(item, {
+            display: "block",
+            width: "100%",
+            padding: "0",
+            margin: "0 0 20px"
+          });
+        });
+        workList.querySelectorAll("p").forEach((paragraph) => {
+          setImportantStyles(paragraph, {
+            width: "100%",
+            margin: "8px 0 0",
+            "line-height": "1.85",
+            "white-space": "pre-wrap",
+            "overflow-wrap": "anywhere",
+            "text-align": "left"
+          });
+        });
+
+        exportContainer.appendChild(exportClone);
+        document.body.appendChild(exportContainer);
+        try {
+          await new Promise((resolve) => {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+          });
+          const bounds = exportClone.getBoundingClientRect();
+          if (bounds.width === 0 || bounds.height === 0) {
+            throw new Error("보고서 화면이 표시되지 않아 PDF를 만들 수 없습니다.");
+          }
+
+          const canvas = await window.html2canvas(exportClone, {
+            scale: 3,
+            useCORS: true,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: Math.ceil(exportClone.scrollWidth),
+            windowHeight: Math.ceil(exportClone.scrollHeight),
+            backgroundColor: null,
+            onclone: (clonedDocument) => {
+              const clonedContainer = clonedDocument.querySelector("#pdf-export-container");
+              clonedContainer.style.setProperty("visibility", "visible", "important");
+            }
+          });
+          if (canvas.width === 0 || canvas.height === 0) {
+            throw new Error("보고서 내용을 이미지로 렌더링하지 못했습니다.");
+          }
+
+          const maxPageImageHeight = pageHeight - margin * 2;
+          const pixelsPerMm = canvas.width / imgWidth;
+          const maxSliceHeight = Math.max(1, Math.floor(maxPageImageHeight * pixelsPerMm));
+          const pageCanvasWidth = Math.ceil(pageWidth * pixelsPerMm);
+          const pageCanvasHeight = Math.ceil(pageHeight * pixelsPerMm);
+          const pageMarginPx = margin * pixelsPerMm;
+          const cardWidthPx = imgWidth * pixelsPerMm;
+          const cardHeightPx = maxPageImageHeight * pixelsPerMm;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          if (!context) {
+            throw new Error("PDF 페이지 분할을 위한 Canvas 컨텍스트를 생성하지 못했습니다.");
+          }
+
+          let sourceY = 0;
+          let pageNumber = 0;
+          while (sourceY < canvas.height) {
+            const targetY = Math.min(sourceY + maxSliceHeight, canvas.height);
+            let sliceEndY = targetY;
+            if (targetY < canvas.height) {
+              const searchStartY = Math.max(sourceY + 1, targetY - Math.floor(40 * pixelsPerMm));
+              const searchHeight = targetY - searchStartY;
+              if (searchHeight > 0) {
+                const imageData = context.getImageData(0, searchStartY, canvas.width, searchHeight);
+                for (let row = searchHeight - 1; row >= 0; row -= 1) {
+                  let hasInk = false;
+                  for (let x = 0; x < canvas.width; x += 1) {
+                    const pixelIndex = (row * canvas.width + x) * 4;
+                    if (
+                      imageData.data[pixelIndex + 3] > 0 &&
+                      (
+                        imageData.data[pixelIndex] < 245 ||
+                        imageData.data[pixelIndex + 1] < 245 ||
+                        imageData.data[pixelIndex + 2] < 245
+                      )
+                    ) {
+                      hasInk = true;
+                      break;
+                    }
+                  }
+                  if (!hasInk) {
+                    sliceEndY = searchStartY + row + 1;
+                    break;
+                  }
+                }
+              }
+            }
+
+            const sliceHeight = Math.max(1, sliceEndY - sourceY);
+            const pageCanvas = document.createElement("canvas");
+            pageCanvas.width = pageCanvasWidth;
+            pageCanvas.height = pageCanvasHeight;
+            const pageContext = pageCanvas.getContext("2d");
+            if (!pageContext) {
+              throw new Error("PDF 페이지 이미지를 생성하지 못했습니다.");
+            }
+            pageContext.fillStyle = "#e8e9e7";
+            pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            pageContext.save();
+            pageContext.fillStyle = "rgba(91, 101, 101, 0.10)";
+            pageContext.beginPath();
+            pageContext.moveTo(0, pageCanvas.height * 0.68);
+            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.55);
+            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.69);
+            pageContext.lineTo(0, pageCanvas.height * 0.84);
+            pageContext.closePath();
+            pageContext.fill();
+            pageContext.fillStyle = "rgba(255, 255, 255, 0.55)";
+            pageContext.beginPath();
+            pageContext.moveTo(0, pageCanvas.height * 0.78);
+            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.88);
+            pageContext.lineTo(pageCanvas.width, pageCanvas.height);
+            pageContext.lineTo(0, pageCanvas.height * 0.90);
+            pageContext.closePath();
+            pageContext.fill();
+            pageContext.restore();
+
+            const cardX = pageMarginPx;
+            const cardY = pageMarginPx;
+            const cardRadius = 16 * pixelsPerMm / cssPixelsPerMm;
+            pageContext.save();
+            pageContext.shadowColor = "rgba(39, 54, 60, 0.12)";
+            pageContext.shadowBlur = 12 * pixelsPerMm / cssPixelsPerMm;
+            pageContext.shadowOffsetX = 0;
+            pageContext.shadowOffsetY = 4 * pixelsPerMm / cssPixelsPerMm;
+            pageContext.fillStyle = "#fff";
+            pageContext.beginPath();
+            pageContext.roundRect(cardX, cardY, cardWidthPx, cardHeightPx, cardRadius);
+            pageContext.fill();
+            pageContext.restore();
+
+            pageContext.drawImage(
+              canvas,
+              0, sourceY, canvas.width, sliceHeight,
+              cardX, cardY, canvas.width, sliceHeight
+            );
+
+            if (pageNumber > 0) {
+              pdf.addPage();
+            }
+            pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, pageHeight);
+
+            sourceY = sliceEndY;
+            pageNumber += 1;
+          }
+
+          pdf.save("업무보고서.pdf");
+        } finally {
+          exportContainer.remove();
+        }
       }
 
       function getStatusPresentation(status) {
