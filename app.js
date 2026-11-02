@@ -798,7 +798,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           }
         } catch (error) {
           console.error("Supabase sign-in failed.", error);
-          showAuthError(error.message);
+          showAuthError(error.message === "Invalid login credentials"
+            ? "로그인 정보가 올바르지 않습니다 / 账号或密码错误"
+            : error.message);
         } finally {
           submitButton.disabled = false;
         }
