@@ -10,8 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@latest/dist/html2canvas.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@latest/dist/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js" defer></script>
   </head>
   <body>
     <p id="supabase-sdk-error" class="dependency-error-banner" role="alert" hidden>
@@ -309,8 +308,11 @@
                 <button class="action-button action-button--secondary" id="report-list-button" type="button">
                   목록
                 </button>
+                <button class="action-button action-button--secondary" id="complete-work-button" type="button">
+                  업무완료처리
+                </button>
                 <button class="action-button action-button--primary" id="export-pdf-button" type="button">
-                  완료 처리 후 PDF 다운로드
+                  PDF 다운로드
                 </button>
               </div>
             </header>

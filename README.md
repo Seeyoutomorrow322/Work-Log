@@ -1,90 +1,90 @@
-# Daily Work Log
+# 업무일지 (Daily Work Log)
 
-一个基于 HTML、CSS 和原生 JavaScript 的多语言工作日志应用，使用 Supabase 提供用户认证、数据库和头像存储服务。
+Supabase를 통해 사용자 인증, 데이터베이스, 프로필 이미지 저장 기능을 제공하는 HTML, CSS, 순수 JavaScript 기반의 다국어 업무일지 애플리케이션입니다. (A multilingual work-log application built with HTML, CSS, and vanilla JavaScript, using Supabase for authentication, database, and avatar storage.)
 
-## 功能介绍
+## 주요 기능 (Features)
 
-- 邮箱和密码注册、登录、退出及密码重置。
-- 工作日志的创建、查看、编辑和删除。
-- 工作日志仪表盘、状态汇总及按日期查看。
-- 用户昵称和头像管理。
-- 工作日志详情预览，以及完成日志后导出 PDF。
-- 韩文、中文和英文混合界面。
+- 이메일과 비밀번호를 이용한 회원가입, 로그인, 로그아웃 및 비밀번호 재설정을 지원합니다. (Sign up, sign in, sign out, and password reset with email and password.)
+- 업무일지를 생성, 조회, 수정 및 삭제할 수 있습니다. (Create, view, edit, and delete work logs.)
+- 대시보드에서 업무일지와 상태를 요약하고 날짜별로 확인할 수 있습니다. (Review work-log summaries and statuses on the dashboard, and browse logs by date.)
+- 사용자 닉네임과 프로필 이미지를 관리할 수 있습니다. (Manage user nicknames and profile images.)
+- 업무일지 상세 내용을 미리 보고, 완료 처리된 일지를 PDF로 내보낼 수 있습니다. (Preview work-log details and export completed logs as PDF.)
+- 한국어, 중국어, 영어가 혼합된 인터페이스를 제공합니다. (Provides an interface that combines Korean, Chinese, and English.)
 
-## 目录结构
+## 디렉터리 구조 (Directory Structure)
 
 ```text
 .
-├── index.html                    # 主应用页面：登录、仪表盘、日志列表、编辑和报告
-├── app.js                        # 主应用逻辑及 Supabase 数据访问
-├── style.css                     # 页面样式和响应式布局
-├── reset-password.html           # 密码重置页面
-├── reset-password.js             # 密码重置和 Supabase 初始化逻辑
-├── login-office-illustration.png # 登录页插图
+├── index.html                    # 메인 애플리케이션 페이지: 로그인, 대시보드, 일지 목록, 편집 및 보고서 (Main app page: sign-in, dashboard, log list, editor, and reports)
+├── app.js                        # 메인 애플리케이션 로직 및 Supabase 데이터 접근 (Main app logic and Supabase data access)
+├── style.css                     # 페이지 스타일 및 반응형 레이아웃 (Page styles and responsive layout)
+├── reset-password.html           # 비밀번호 재설정 페이지 (Password reset page)
+├── reset-password.js             # 비밀번호 재설정 및 Supabase 초기화 로직 (Password reset and Supabase initialization logic)
+├── login-office-illustration.png # 로그인 페이지 일러스트 (Sign-in page illustration)
 └── assets/
-    └── login-illustration-hd.png # 登录页使用的高清插图
+    └── login-illustration-hd.png # 로그인 페이지에서 사용하는 고해상도 일러스트 (High-resolution illustration used on the sign-in page)
 ```
 
-应用通过 CDN 加载 Supabase JS、html2canvas 和 jsPDF；当前仓库没有 npm 构建脚本，也没有 Supabase CLI 配置或数据库迁移文件。
+애플리케이션은 CDN을 통해 Supabase JS, html2canvas, jsPDF를 불러옵니다. 현재 저장소에는 npm 빌드 스크립트, Supabase CLI 설정 또는 데이터베이스 마이그레이션 파일이 없습니다. (The app loads Supabase JS, html2canvas, and jsPDF from CDNs. The repository currently has no npm build scripts, Supabase CLI configuration, or database migration files.)
 
-## 本地运行
+## 로컬 실행 (Local Development)
 
-### 环境要求
+### 필수 환경 (Requirements)
 
-- Python 3，或 VS Code 的 Live Server 扩展。
-- 如需运行本地 Supabase：Docker Desktop 和 Supabase CLI。
-- Supabase CLI 可通过 `npx` 运行；需要已安装 Node.js 和 npm。
+- Python 3 또는 VS Code Live Server 확장 프로그램이 필요합니다. (Python 3 or the VS Code Live Server extension.)
+- 로컬 Supabase를 실행하려면 Docker Desktop과 Supabase CLI가 필요합니다. (Docker Desktop and the Supabase CLI are required to run Supabase locally.)
+- Supabase CLI는 `npx`로 실행할 수 있으며, Node.js와 npm이 설치되어 있어야 합니다. (The Supabase CLI can be run with `npx`; Node.js and npm must be installed.)
 
-### 运行前端
+### 프런트엔드 실행 (Run the Frontend)
 
-在项目根目录启动静态 HTTP 服务：
+프로젝트 루트에서 정적 HTTP 서버를 시작합니다. (Start a static HTTP server from the project root.)
 
 ```powershell
 py -m http.server 5501
 ```
 
-然后访问：
+그런 다음 다음 주소에 접속합니다. (Then open one of the following URLs.)
 
-- 主应用：<http://localhost:5501/>
-- 密码重置页：<http://localhost:5501/reset-password.html>
+- 메인 애플리케이션 (Main app): <http://localhost:5501/>
+- 비밀번호 재설정 페이지 (Password reset page): <http://localhost:5501/reset-password.html>
 
-也可以使用 VS Code Live Server；仓库的编辑器设置将其端口设为 `5501`。
+VS Code Live Server를 사용할 수도 있습니다. 저장소의 편집기 설정은 포트를 `5501`로 지정합니다. (You can also use VS Code Live Server. The repository's editor settings configure it to use port `5501`.)
 
-### 启动本地 Supabase
+### 로컬 Supabase 시작 (Start Supabase Locally)
 
-1. 在项目根目录初始化 Supabase 配置并启动本地服务：
+1. 프로젝트 루트에서 Supabase 설정을 초기화하고 로컬 서비스를 시작합니다. (Initialize the Supabase configuration and start the local services from the project root.)
 
    ```powershell
    npx supabase@latest init
    npx supabase@latest start
    ```
 
-   首次启动会下载所需容器镜像。Supabase Studio 和本地 API 地址会在命令输出中列出。
+   처음 시작할 때 필요한 컨테이너 이미지를 다운로드합니다. Supabase Studio와 로컬 API 주소는 명령 출력에 표시됩니다. (The required container images are downloaded on first startup. The command output lists the Supabase Studio and local API URLs.)
 
-2. 创建数据库迁移：
+2. 데이터베이스 마이그레이션을 생성합니다. (Create a database migration.)
 
    ```powershell
    npx supabase@latest migration new initial_schema
    ```
 
-   将下方“数据库表和 RLS 示例”中的 SQL 放入新生成的 `supabase/migrations/<时间戳>_initial_schema.sql` 文件。
+   아래 “데이터베이스 테이블 및 RLS 예시”의 SQL을 새로 생성된 `supabase/migrations/<timestamp>_initial_schema.sql` 파일에 넣습니다. (Place the SQL from “Database Tables and RLS Example” below into the newly generated `supabase/migrations/<timestamp>_initial_schema.sql` file.)
 
-3. 应用迁移并查看本地连接信息：
+3. 마이그레이션을 적용하고 로컬 연결 정보를 확인합니다. (Apply the migration and check the local connection details.)
 
    ```powershell
    npx supabase@latest db reset
    npx supabase@latest status
    ```
 
-4. 在 `app.js` 和 `reset-password.js` 中，将 `SUPABASE_URL` 与 `SUPABASE_ANON_KEY` 分别替换为 `status` 输出的本地 API URL 和 anon/publishable key。两个文件必须指向同一个 Supabase 项目。不要将 `service_role` key 放入前端代码。
+4. `app.js`와 `reset-password.js`의 `SUPABASE_URL` 및 `SUPABASE_ANON_KEY`를 `status` 출력에 표시된 로컬 API URL과 anon/publishable key로 각각 바꿉니다. 두 파일은 동일한 Supabase 프로젝트를 가리켜야 합니다. 프런트엔드 코드에 `service_role` key를 넣지 마세요. (In `app.js` and `reset-password.js`, replace `SUPABASE_URL` and `SUPABASE_ANON_KEY` with the local API URL and anon/publishable key shown by `status`. Both files must point to the same Supabase project. Do not put a `service_role` key in frontend code.)
 
-5. 在 Supabase Auth 的 URL 配置中允许本地前端地址（例如 `http://localhost:5501` 和 `http://127.0.0.1:5501`），并将密码重置地址加入允许的重定向地址。运行注册和重置密码流程时，可在本地 Supabase 输出中查看 Inbucket 邮件测试服务地址。
+5. Supabase Auth URL 설정에서 로컬 프런트엔드 주소(예: `http://localhost:5501` 및 `http://127.0.0.1:5501`)를 허용하고 비밀번호 재설정 주소도 허용된 리디렉션 URL에 추가합니다. 회원가입 및 비밀번호 재설정 테스트에 사용할 Inbucket 메일 테스트 서비스 주소는 로컬 Supabase 출력에서 확인할 수 있습니다. (In the Supabase Auth URL configuration, allow the local frontend URLs (for example, `http://localhost:5501` and `http://127.0.0.1:5501`) and add the password reset URL to the allowed redirect URLs. The local Supabase output includes the Inbucket email testing service URL for sign-up and password reset.)
 
-本仓库目前没有 `supabase/` 配置和迁移；执行 `init` 会在项目根目录创建它们。若只想使用现有云端 Supabase 项目，无需启动本地 Supabase，直接启动静态前端即可。
+현재 저장소에는 `supabase/` 설정과 마이그레이션이 없습니다. `init` 명령을 실행하면 프로젝트 루트에 해당 파일이 생성됩니다. 기존 클라우드 Supabase 프로젝트만 사용하려면 로컬 Supabase를 시작할 필요 없이 정적 프런트엔드만 실행하면 됩니다. (The repository currently has no `supabase/` configuration or migrations; running `init` creates them in the project root. If you only want to use an existing cloud Supabase project, you do not need to start Supabase locally—just run the static frontend.)
 
-## 数据库表和 RLS 示例
+## 데이터베이스 테이블 및 RLS 예시 (Database Tables and RLS Example)
 
-应用会访问 `public.users`、`public.work_logs` 两张表和名为 `avatars` 的 Storage bucket。以下 SQL 是适用于个人日志的最小权限示例：用户只能读写自己的资料和日志。应用界面虽然提供“全部日志”列表，但启用此策略后，API 只会返回当前用户自己的日志。
+애플리케이션은 `public.users`, `public.work_logs` 테이블과 `avatars`라는 Storage bucket을 사용합니다. 아래 SQL은 개인 업무일지에 적합한 최소 권한 예시로, 사용자는 자신의 프로필과 일지만 읽고 쓸 수 있습니다. 인터페이스에는 “전체 일지” 목록이 있지만, 이 정책을 활성화하면 API는 현재 사용자의 일지만 반환합니다. (The app uses the `public.users` and `public.work_logs` tables and a Storage bucket named `avatars`. The SQL below is a least-privilege example for personal work logs: users can read and write only their own profiles and logs. Although the interface includes an “All Logs” list, enabling these policies means the API returns only the current user's logs.)
 
 ```sql
 create table public.users (
@@ -178,12 +178,12 @@ create policy "Users can delete avatars in their own folder"
   );
 ```
 
-### RLS 配置说明
+### RLS 설정 안내 (RLS Configuration Notes)
 
-- **先启用 RLS，再授权访问。** 授予 `authenticated` 的 SQL 权限并不会绕过 RLS；每个操作仍必须通过对应策略。
-- `USING` 限制可读取、更新或删除的现有行；`WITH CHECK` 限制插入或更新后允许保存的行。用 `auth.uid()` 与 `user_id` 比较，可以阻止用户伪造他人的记录归属。
-- 用户资料的 `user_id` 对应 Supabase Auth 用户 ID；日志的 `user_id` 也关联该资料。应用会在用户首次登录时创建资料。
-- 头像 bucket 设置为公开，任何人都可以读取头像图片；上传、替换和删除仅允许操作对象路径以当前用户 ID 开头的文件。不要在公开 bucket 中放置敏感文件。
-- 如果产品需要登录用户共同查看所有日志，可另行增加“所有已登录用户可 `SELECT` 日志”的策略，并为日志作者资料增加相应的只读策略。此配置会向所有登录用户公开日志正文；不要在未确认数据共享范围时直接开放。
+- **먼저 RLS를 활성화한 다음 접근 권한을 부여하세요.** `authenticated`에 SQL 권한을 부여해도 RLS를 우회할 수 없으며, 각 작업은 해당 정책을 통과해야 합니다. (**Enable RLS before granting access.** Granting SQL privileges to `authenticated` does not bypass RLS; each operation must still satisfy its policy.)
+- `USING`은 읽기, 수정 또는 삭제할 수 있는 기존 행을 제한하고, `WITH CHECK`는 삽입 또는 수정 후 저장할 수 있는 행을 제한합니다. `auth.uid()`와 `user_id`를 비교하면 다른 사용자의 소유자로 가장한 데이터 저장을 방지할 수 있습니다. (`USING` restricts which existing rows can be read, updated, or deleted; `WITH CHECK` restricts which rows can be saved after insertion or update. Comparing `auth.uid()` with `user_id` prevents users from claiming another user's records.)
+- 프로필의 `user_id`는 Supabase Auth 사용자 ID에 대응하며, 로그의 `user_id`도 해당 프로필을 참조합니다. 사용자가 처음 로그인하면 애플리케이션이 프로필을 생성합니다. (The profile's `user_id` corresponds to the Supabase Auth user ID, and each log's `user_id` references that profile. The app creates a profile when a user signs in for the first time.)
+- 아바타 bucket은 공개로 설정되어 누구나 이미지를 읽을 수 있습니다. 업로드, 교체, 삭제는 객체 경로가 현재 사용자 ID로 시작하는 파일에만 허용됩니다. 공개 bucket에 민감한 파일을 저장하지 마세요. (The avatar bucket is public, so anyone can read its images. Upload, replacement, and deletion are limited to files whose object paths start with the current user's ID. Do not store sensitive files in a public bucket.)
+- 모든 로그인 사용자가 일지를 함께 볼 수 있어야 한다면 로그인 사용자에게 로그 `SELECT`를 허용하는 정책을 별도로 추가하고, 작성자 프로필에도 적절한 읽기 전용 정책을 추가할 수 있습니다. 이 설정은 모든 로그인 사용자에게 로그 본문을 공개하므로 데이터 공유 범위를 확인하지 않은 상태로 활성화하지 마세요. (If all signed-in users need to view logs together, you can add a separate policy allowing signed-in users to `SELECT` logs and an appropriate read-only policy for author profiles. This exposes log contents to every signed-in user, so do not enable it without confirming the intended data-sharing scope.)
 
-> 不要在浏览器代码中使用 `service_role` 密钥。它可以绕过 RLS，只能保存在受信任的服务端环境中。
+> 브라우저 코드에서 `service_role` key를 사용하지 마세요. 이 key는 RLS를 우회할 수 있으므로 신뢰할 수 있는 서버 환경에만 보관해야 합니다. (Do not use a `service_role` key in browser code. It can bypass RLS and must be kept only in a trusted server environment.)

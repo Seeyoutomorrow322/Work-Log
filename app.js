@@ -337,7 +337,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function exportPDF() {
-        if (typeof window.html2canvas !== "function" || typeof window.jspdf?.jsPDF !== "function") {
+        if (typeof window.html2pdf !== "function") {
           throw new Error("PDF 내보내기 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
         }
 
@@ -348,24 +348,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         }
 
         await document.fonts.ready;
-
-        const scale = Math.min(
-          2,
-          8192 / Math.max(bounds.width, bounds.height),
-          Math.sqrt(12000000 / (bounds.width * bounds.height))
-        );
-        let canvas;
-
-        try {
-          canvas = await window.html2canvas(reportContent, {
-            allowTaint: false,
+        const options = {
+          filename: "업무보고서.pdf",
+          image: { type: "jpeg", quality: 0.95 },
+          html2canvas: {
             backgroundColor: null,
-            logging: false,
-            scale,
+            scale: 2,
             useCORS: true,
             windowWidth: 1024,
-            scrollX: 0,
-            scrollY: 0,
             onclone: (clonedDocument) => {
               const clonedContent = clonedDocument.querySelector("#report-content");
               clonedContent.style.background = getComputedStyle(document.querySelector("#page-report")).background;
@@ -378,75 +368,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
               clonedContent.style.boxSizing = "border-box";
               clonedContent.querySelector(".report-actions")?.remove();
             }
-          });
-
-          if (canvas.width === 0 || canvas.height === 0) {
-            throw new Error("보고서 내용을 이미지로 변환하지 못했습니다.");
-          }
-
-          const { jsPDF } = window.jspdf;
-          const pdf = new jsPDF({
-            orientation: "portrait",
-            unit: "mm",
-            format: "a4",
-            compress: true
-          });
-          const pageWidthMm = 210;
-          const pageHeightMm = 297;
-          const pageHeightPx = Math.floor(canvas.width * pageHeightMm / pageWidthMm);
-          const pageCount = Math.ceil(canvas.height / pageHeightPx);
-
-          for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-            const sourceY = pageIndex * pageHeightPx;
-            const sliceHeight = Math.min(pageHeightPx, canvas.height - sourceY);
-            const pageCanvas = document.createElement("canvas");
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = sliceHeight;
-
-            try {
-              const context = pageCanvas.getContext("2d");
-              if (!context) {
-                throw new Error("PDF 페이지를 준비하지 못했습니다.");
-              }
-              context.drawImage(
-                canvas,
-                0,
-                sourceY,
-                canvas.width,
-                sliceHeight,
-                0,
-                0,
-                canvas.width,
-                sliceHeight
-              );
-
-              if (pageIndex > 0) {
-                pdf.addPage("a4", "portrait");
-              }
-              const imageHeightMm = sliceHeight * pageWidthMm / canvas.width;
-              pdf.addImage(
-                pageCanvas.toDataURL("image/jpeg", 0.95),
-                "JPEG",
-                0,
-                0,
-                pageWidthMm,
-                imageHeightMm,
-                undefined,
-                "FAST"
-              );
-            } finally {
-              pageCanvas.width = 0;
-              pageCanvas.height = 0;
-            }
-          }
-
-          await pdf.save("업무보고서.pdf");
-        } finally {
-          if (canvas) {
-            canvas.width = 0;
-            canvas.height = 0;
-          }
-        }
+          },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] }
+        };
+        await window.html2pdf().set(options).from(reportContent).save();
       }
 
       function getStatusPresentation(status) {
@@ -1335,36 +1261,60 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       const exportPdfButton = document.querySelector("#export-pdf-button");
       exportPdfButton.addEventListener("click", async () => {
-        if (!selectedReport || selectedReport.id === undefined) {
+        if (!selectedReport) {
           await showMessage("내보낼 업무 일지를 찾을 수 없습니다.");
           return;
         }
 
         exportPdfButton.disabled = true;
         try {
+          await exportPDF();
+        } catch (error) {
+          console.error("Unable to export work log to PDF.", error);
+          await showMessage(`PDF 내보내기에 실패했습니다: ${error.message}`);
+        } finally {
+          exportPdfButton.disabled = false;
+        }
+      });
+
+      const completeWorkButton = document.querySelector("#complete-work-button");
+      completeWorkButton.addEventListener("click", async () => {
+        if (!selectedReport || selectedReport.id === undefined) {
+          await showMessage("완료 처리할 업무일지를 찾을 수 없습니다. 먼저 업무일지를 저장해 주세요.");
+          return;
+        }
+
+        completeWorkButton.disabled = true;
+        try {
           const { data, error } = await supabaseClient
             .from("work_logs")
             .update({ status: "완료" })
             .eq("id", selectedReport.id)
-            .select(workLogSelect)
+            .select("id, status")
             .maybeSingle();
           if (error) {
             throw error;
           }
           if (!data) {
-            await showMessage("내보낼 수 있는 업무 일지가 없습니다. 먼저 편집 페이지에서 작성을 완료하고 저장해 주세요.");
+            await showMessage("업무일지를 완료 처리할 수 없습니다. 권한과 저장 상태를 확인해 주세요.");
             return;
           }
 
-          [selectedReport] = await attachWorkLogUsers([data]);
-          await refreshWorkLogs();
+          selectedReport = { ...selectedReport, status: data.status };
           renderReportPage(selectedReport);
-          await exportPDF();
+          try {
+            await refreshWorkLogs();
+          } catch (refreshError) {
+            console.error("Work log was completed, but the list could not be refreshed.", refreshError);
+            await showMessage(`업무일지는 완료 처리되었지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
+            return;
+          }
+          await showMessage("업무일지를 완료 처리했습니다.");
         } catch (error) {
-          console.error("Unable to complete or export the work log.", error);
-          await showMessage(`업무일지 완료 처리 또는 PDF 내보내기에 실패했습니다: ${error.message}`);
+          console.error("Unable to complete work log.", error);
+          await showMessage(`업무일지 완료 처리에 실패했습니다: ${error.message}`);
         } finally {
-          exportPdfButton.disabled = false;
+          completeWorkButton.disabled = false;
         }
       });
 
