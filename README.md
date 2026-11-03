@@ -190,10 +190,13 @@ create policy "Users can delete avatars in their own folder"
 ### 테스트 결과 (Test Results)
 
 **1. PDF 다운로드 및 기능 분리 테스트 성공**
-![PDF 테스트](assets/PDF 다운로드' 및 '업무 완료 처리' 기능 분리 테스트 성공.png)
+![PDF 테스트]
+(assets/test_pdf_success.png)
 
 **2. RLS 권한 격리 테스트 성공**
-![RLS 테스트](assets/RLS 권한 격리 테스트 성공 (타인 계정 접근 및 수정 불가 확인).png)
+![RLS 테스트]
+(assets/test_rls_isolation.png)
 
 **3. GitHub 최신 커밋 기록**
-![GitHub 커밋](assets/image.png)
+![GitHub 커밋]
+(assets/image.png)
