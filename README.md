@@ -196,4 +196,5 @@ create policy "Users can delete avatars in their own folder"
 ![RLS 테스트](assets/test_rls_isolation.png)
 
 **3. GitHub 최신 커밋 기록**
+
 ![GitHub 커밋](assets/image.png)
