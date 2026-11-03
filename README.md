@@ -187,3 +187,13 @@ create policy "Users can delete avatars in their own folder"
 - 모든 로그인 사용자가 일지를 함께 볼 수 있어야 한다면 로그인 사용자에게 로그 `SELECT`를 허용하는 정책을 별도로 추가하고, 작성자 프로필에도 적절한 읽기 전용 정책을 추가할 수 있습니다. 이 설정은 모든 로그인 사용자에게 로그 본문을 공개하므로 데이터 공유 범위를 확인하지 않은 상태로 활성화하지 마세요. (If all signed-in users need to view logs together, you can add a separate policy allowing signed-in users to `SELECT` logs and an appropriate read-only policy for author profiles. This exposes log contents to every signed-in user, so do not enable it without confirming the intended data-sharing scope.)
 
 > 브라우저 코드에서 `service_role` key를 사용하지 마세요. 이 key는 RLS를 우회할 수 있으므로 신뢰할 수 있는 서버 환경에만 보관해야 합니다. (Do not use a `service_role` key in browser code. It can bypass RLS and must be kept only in a trusted server environment.)
+### 테스트 결과 (Test Results)
+
+**1. PDF 다운로드 및 기능 분리 테스트 성공**
+![PDF 테스트](assets/PDF 다운로드' 및 '업무 완료 처리' 기능 분리 테스트 성공.png)
+
+**2. RLS 권한 격리 테스트 성공**
+![RLS 테스트](assets/RLS 권한 격리 테스트 성공 (타인 계정 접근 및 수정 불가 확인).png)
+
+**3. GitHub 최신 커밋 기록**
+![GitHub 커밋](assets/image.png)
