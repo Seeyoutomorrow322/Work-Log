@@ -167,9 +167,15 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function loadWorkLogs() {
+        const requestedUserId = currentUser?.id;
+        if (!requestedUserId) {
+          throw new Error("로그인한 사용자만 업무일지를 불러올 수 있습니다.");
+        }
+
         const { data, error } = await supabaseClient
           .from("work_logs")
           .select(workLogSelect)
+          .eq("user_id", requestedUserId)
           .order("date", { ascending: false });
         if (error) {
           throw error;
@@ -656,7 +662,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         statusCell.append(status);
 
         const actionsCell = document.createElement("td");
-        if (currentUser?.id && log.user_id === currentUser.id) {
+        const isOwnLog = Boolean(currentUser?.id && log.user_id === currentUser.id);
+        if (isOwnLog) {
           const viewButton = document.createElement("button");
           viewButton.className = "view-link";
           viewButton.type = "button";
@@ -675,8 +682,18 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       function renderTable(logs = workLogs) {
+        const visibleLogs = currentUser?.id
+          ? logs.filter((log) => log.user_id === currentUser.id)
+          : [];
+
         document.querySelectorAll("[data-log-table]").forEach((tableBody) => {
-          const rows = logs.map(createLogRow);
+          const rows = [];
+          for (const log of visibleLogs) {
+            if (!currentUser?.id || log.user_id !== currentUser.id) {
+              continue;
+            }
+            rows.push(createLogRow(log));
+          }
           tableBody.replaceChildren(...rows);
 
           if (rows.length === 0) {
@@ -689,11 +706,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           }
         });
 
-        document.querySelector('[data-summary="total"]').textContent = logs.length;
+        document.querySelector('[data-summary="total"]').textContent = visibleLogs.length;
         document.querySelector('[data-summary="complete"]').textContent =
-          logs.filter((log) => log.status === "완료" || log.status === "已完成").length;
+          visibleLogs.filter((log) => log.status === "완료" || log.status === "已完成").length;
         document.querySelector('[data-summary="progress"]').textContent =
-          logs.filter((log) => log.status === "진행 중" || log.status === "进行中").length;
+          visibleLogs.filter((log) => log.status === "진행 중" || log.status === "进行中").length;
       }
 
       function switchPage(pageId) {

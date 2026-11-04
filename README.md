@@ -18,6 +18,7 @@ Supabase를 통해 사용자 인증, 데이터베이스, 프로필 이미지 저
 ├── index.html                    # 메인 애플리케이션 페이지: 로그인, 대시보드, 일지 목록, 편집 및 보고서 (Main app page: sign-in, dashboard, log list, editor, and reports)
 ├── app.js                        # 메인 애플리케이션 로직 및 Supabase 데이터 접근 (Main app logic and Supabase data access)
 ├── style.css                     # 페이지 스타일 및 반응형 레이아웃 (Page styles and responsive layout)
+├── TEST_CHECKLIST.md             # 주요 기능과 권한 검증을 위한 수동 테스트 체크리스트 (Manual feature and access-control test checklist)
 ├── reset-password.html           # 비밀번호 재설정 페이지 (Password reset page)
 ├── reset-password.js             # 비밀번호 재설정 및 Supabase 초기화 로직 (Password reset and Supabase initialization logic)
 ├── login-office-illustration.png # 로그인 페이지 일러스트 (Sign-in page illustration)
@@ -129,7 +130,7 @@ create policy "Users can update their own profile"
 
 create policy "Users can read their own work logs"
   on public.work_logs for select to authenticated
-  using (user_id = (select auth.uid()));
+  using (auth.uid() = user_id);
 
 create policy "Users can create their own work logs"
   on public.work_logs for insert to authenticated
@@ -137,12 +138,12 @@ create policy "Users can create their own work logs"
 
 create policy "Users can update their own work logs"
   on public.work_logs for update to authenticated
-  using (user_id = (select auth.uid()))
-  with check (user_id = (select auth.uid()));
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 create policy "Users can delete their own work logs"
   on public.work_logs for delete to authenticated
-  using (user_id = (select auth.uid()));
+  using (auth.uid() = user_id);
 
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
@@ -184,7 +185,7 @@ create policy "Users can delete avatars in their own folder"
 - `USING`은 읽기, 수정 또는 삭제할 수 있는 기존 행을 제한하고, `WITH CHECK`는 삽입 또는 수정 후 저장할 수 있는 행을 제한합니다. `auth.uid()`와 `user_id`를 비교하면 다른 사용자의 소유자로 가장한 데이터 저장을 방지할 수 있습니다. (`USING` restricts which existing rows can be read, updated, or deleted; `WITH CHECK` restricts which rows can be saved after insertion or update. Comparing `auth.uid()` with `user_id` prevents users from claiming another user's records.)
 - 프로필의 `user_id`는 Supabase Auth 사용자 ID에 대응하며, 로그의 `user_id`도 해당 프로필을 참조합니다. 사용자가 처음 로그인하면 애플리케이션이 프로필을 생성합니다. (The profile's `user_id` corresponds to the Supabase Auth user ID, and each log's `user_id` references that profile. The app creates a profile when a user signs in for the first time.)
 - 아바타 bucket은 공개로 설정되어 누구나 이미지를 읽을 수 있습니다. 업로드, 교체, 삭제는 객체 경로가 현재 사용자 ID로 시작하는 파일에만 허용됩니다. 공개 bucket에 민감한 파일을 저장하지 마세요. (The avatar bucket is public, so anyone can read its images. Upload, replacement, and deletion are limited to files whose object paths start with the current user's ID. Do not store sensitive files in a public bucket.)
-- 모든 로그인 사용자가 일지를 함께 볼 수 있어야 한다면 로그인 사용자에게 로그 `SELECT`를 허용하는 정책을 별도로 추가하고, 작성자 프로필에도 적절한 읽기 전용 정책을 추가할 수 있습니다. 이 설정은 모든 로그인 사용자에게 로그 본문을 공개하므로 데이터 공유 범위를 확인하지 않은 상태로 활성화하지 마세요. (If all signed-in users need to view logs together, you can add a separate policy allowing signed-in users to `SELECT` logs and an appropriate read-only policy for author profiles. This exposes log contents to every signed-in user, so do not enable it without confirming the intended data-sharing scope.)
+- 이 프로젝트의 권한 요구사항은 사용자별 일지 격리입니다. 다른 사용자에게 로그 `SELECT`를 허용하는 정책을 추가하지 마세요. PostgreSQL의 기본 permissive 정책은 여러 개가 OR로 결합되므로, 기존의 더 넓은 `SELECT`·`UPDATE`·`DELETE` 정책도 확인하고 제거해야 합니다. (This project's access requirement is per-user log isolation. Do not add a policy allowing other users to `SELECT` logs. PostgreSQL's permissive policies are combined with OR, so check for and remove any existing broader `SELECT`, `UPDATE`, or `DELETE` policies.)
 
 > 브라우저 코드에서 `service_role` key를 사용하지 마세요. 이 key는 RLS를 우회할 수 있으므로 신뢰할 수 있는 서버 환경에만 보관해야 합니다. (Do not use a `service_role` key in browser code. It can bypass RLS and must be kept only in a trusted server environment.)
 
@@ -226,15 +227,36 @@ create policy "Users can delete avatars in their own folder"
 
 ![GitHub 커밋](assets/image.png)
 
-### RLS(행 수준 보안)에 대한 이해
+**3.1. 사용자 역할에 따른 데이터 격리 테스트 (用户角色数据隔离测试)**
+
+배경:
+
+지도교수님은 "일반 사용자의 대시보드 목록에는 절대로 본인 외의 다른 사람이 작성한 데이터가 표시되지 않아야 한다"고 요구했습니다.
+이에 Supabase RLS(Row-Level Security) 정책과 프론트엔드 렌더링 로직을 이중으로 적용하여 테스트했습니다.
+
+테스트 시나리오 및 결과:
+
+1. Test Account A (계정A)로 로그인하여 "123" 제목의 일지를 작성하고 저장했습니다.
+2. Test Account B (계정B)로 로그인하여 대시보드를 확인했습니다.
+결과: Test Account B의 대시보드에는 A가 작성한 "123" 일지가 전혀 표시되지 않으며, 오직 B의 데이터만 렌더링됨을 확인했습니다.
+
+[Test Account A (계정A)]의 대시보드 화면:
+
+![Test Account A (계정A) 대시보드](assets/TestAccountA.png)
+
+[Test Account B (계정B)]의 대시보드 화면:
+
+![Test Account B (계정B) 대시보드](assets/TestAccountB.png)
+
+### 4. RLS(행 수준 보안)에 대한 이해
 
 제가 배운 RLS는 '행 수준 보안(Row-Level Security)'을 뜻하며, 데이터베이스의 보안을 담당하는 핵심 기능입니다.
 
-**1. RLS는 어떻게 데이터를 보호할까요?**
+**4. RLS는 어떻게 데이터를 보호할까요?**
 
 RLS는 '데이터베이스에 붙이는 필터'와 같습니다. 제가 `app.js`에서 `select * from work_logs`라는 코드를 입력해 모든 데이터를 불러오려고 하더라도, 데이터베이스가 자동으로 내 계정 ID와 일치하는 데이터만 남겨서 보여줍니다. 즉, 다른 사람의 데이터는 필터에 걸려 내 화면으로 넘어오지 못하게 합니다.
 
-**2. 왜 이렇게 할까요? (AI의 도움과 제 이해)**
+**5. 왜 이렇게 할까요? (AI의 도움과 제 이해)**
 
 초기에는 AI가 RLS 설정과 `auth.uid()`라는 코드를 도와주었지만, 저는 이 원리를 이해했습니다. `auth.uid()`는 현재 로그인한 사람의 고유한 ID를 뜻합니다. 데이터베이스가 이 ID를 확인해 해당 데이터의 소유자를 판단하고, 권한에 맞는 데이터만 반환하게 합니다.
 
