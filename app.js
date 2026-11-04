@@ -1410,8 +1410,17 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           }
 
           const logId = deleteButton.dataset.id;
-          if (!workLogs.some((log) => String(log.id) === logId)) {
+          const workLog = workLogs.find((log) => String(log.id) === logId);
+          if (!workLog) {
             console.error(`No work log found for ID: ${logId}`);
+            return;
+          }
+          if (!currentUser?.id) {
+            await showMessage("로그인 후 업무일지를 삭제할 수 있습니다.");
+            return;
+          }
+          if (workLog.user_id !== currentUser.id) {
+            await showMessage("다른 사용자의 업무일지는 삭제할 수 없습니다.");
             return;
           }
 
@@ -1420,13 +1429,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
               .from("work_logs")
               .delete()
               .eq("id", logId)
+              .eq("user_id", currentUser.id)
               .select("id")
               .maybeSingle();
             if (error) {
               throw error;
             }
             if (!deletedLog) {
-              throw new Error("삭제 권한이 없거나 업무일지가 삭제되지 않았습니다.");
+              throw new Error("삭제 권한이 없거나 업무일지가 삭제되지 않았습니다. 본인이 작성한 일지만 삭제할 수 있습니다.");
             }
             try {
               await refreshWorkLogs();

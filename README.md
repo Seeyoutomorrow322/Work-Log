@@ -187,3 +187,23 @@ create policy "Users can delete avatars in their own folder"
 - 모든 로그인 사용자가 일지를 함께 볼 수 있어야 한다면 로그인 사용자에게 로그 `SELECT`를 허용하는 정책을 별도로 추가하고, 작성자 프로필에도 적절한 읽기 전용 정책을 추가할 수 있습니다. 이 설정은 모든 로그인 사용자에게 로그 본문을 공개하므로 데이터 공유 범위를 확인하지 않은 상태로 활성화하지 마세요. (If all signed-in users need to view logs together, you can add a separate policy allowing signed-in users to `SELECT` logs and an appropriate read-only policy for author profiles. This exposes log contents to every signed-in user, so do not enable it without confirming the intended data-sharing scope.)
 
 > 브라우저 코드에서 `service_role` key를 사용하지 마세요. 이 key는 RLS를 우회할 수 있으므로 신뢰할 수 있는 서버 환경에만 보관해야 합니다. (Do not use a `service_role` key in browser code. It can bypass RLS and must be kept only in a trusted server environment.)
+
+## 개발 일지: 기능 테스트 기록 (Development Log: Feature Test Records)
+
+테스트를 실행할 때 실제 결과와 결론을 기록합니다. 실행 전 테스트 환경(날짜, 브라우저, 배포 버전)과 사용한 테스트 계정을 함께 적고, 권한 테스트는 Supabase 프로젝트에 RLS 정책이 적용된 상태에서 진행합니다. 아래 항목은 결과 기록용 양식이며, 실행하지 않은 테스트는 통과로 간주하지 않습니다.
+
+| 테스트 항목 | 예상 결과 | 실제 결과 | 테스트 결론 |
+|---|---|---|---|
+| 사용자 A가 사용자 B의 일지 조회 시도 | RLS에 의해 일지 내용이 반환되지 않고, 사용자 A에게 다른 사용자의 일지가 노출되지 않습니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+| 사용자 A가 사용자 B의 일지 수정 시도 | 수정 요청이 거부되거나 대상 행이 변경되지 않으며, 사용자 B의 일지 내용은 그대로 유지됩니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+| 사용자 A가 사용자 B의 일지 삭제 시도 | 삭제 요청이 거부되거나 대상 행이 삭제되지 않고, 사용자 B의 일지가 그대로 남습니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+| 완료된 일지의 PDF 다운로드 | PDF 파일이 다운로드되고, 일지 내용이 포함됩니다. 다운로드 동작이 일지 상태를 변경하지 않습니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+| 미완료 일지의 PDF 다운로드 | PDF 파일이 다운로드되며, 다운로드만으로 일지가 완료 처리되거나 상태가 변경되지 않습니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+| 업무 완료 처리 | 저장된 미완료 일지의 상태가 `완료`로 바뀌고, 상세 화면과 목록에 변경된 상태가 반영됩니다. | 실행 후 기입: ____________________ | ☐ 통과 ☐ 실패 ☐ 보류 |
+
+**테스트 환경 및 증적**
+
+- 실행 날짜 / 빌드 또는 배포 버전: ____________________
+- 브라우저 및 버전: ____________________
+- 테스트 계정 및 데이터(민감정보 제외): ____________________
+- 증적 경로 또는 참고 사항: ____________________
