@@ -41,6 +41,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       const pageContents = document.querySelectorAll(".page-content");
       const navigationItems = document.querySelectorAll("[data-nav-target]");
       const workLogForm = document.querySelector("#work-log-form");
+      const authorInput = workLogForm.elements.namedItem("author");
       const dateInput = document.querySelector("#date");
       const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
       const workLogFieldMap = {
@@ -57,6 +58,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let pageTransitionTimeout;
       let pageTransitionFrame;
       let authSessionRequestId = 0;
+      let usernameRevision = 0;
       let currentUser = null;
       let currentUsername = "";
       let currentAvatarUrl = null;
@@ -280,6 +282,41 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       function showUsernameError(message) {
         nicknameError.textContent = message;
         nicknameError.hidden = !message;
+      }
+
+      async function saveUsername(username) {
+        if (!currentUser?.id) {
+          throw new Error("로그인한 사용자를 확인할 수 없습니다.");
+        }
+
+        const { error } = await supabaseClient
+          .from("users")
+          .upsert(
+            {
+              user_id: currentUser.id,
+              username,
+              avatar_url: currentAvatarUrl,
+              updated_at: new Date().toISOString()
+            },
+            { onConflict: "user_id" }
+          );
+        if (error) {
+          throw error;
+        }
+
+        usernameRevision += 1;
+        currentUsername = username;
+        userDisplay.textContent = username;
+        workLogForm.elements.namedItem("author").value = username;
+        workLogs = workLogs.map((log) => ({
+          ...log,
+          users: log.author_uuid === currentUser.id ? { username } : log.users
+        }));
+        renderTable(workLogs);
+        if (selectedReport?.author_uuid === currentUser.id) {
+          selectedReport = { ...selectedReport, users: { username } };
+          renderReportPage(selectedReport);
+        }
       }
 
       function renderReportPage(log) {
@@ -938,7 +975,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
-        currentUsername = currentUser.email?.split("@")[0] || currentUser.id;
+        currentUsername = currentUser.email?.split("@")[0] || "사용자";
         userDisplay.textContent = currentUsername;
         workLogForm.elements.namedItem("author").value = currentUsername;
         if (mainApp.hidden && !authScreen.hidden) {
@@ -948,22 +985,28 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           mainApp.hidden = false;
         }
         try {
+          const profileLoadUsernameRevision = usernameRevision;
           const profile = await loadOrCreateUserProfile(currentUser);
           if (requestId !== authSessionRequestId || currentUser?.id !== nextUser.id) {
             return;
           }
-          currentUsername = profile.username || currentUser.email?.split("@")[0] || currentUser.id;
+          const authorWasEdited = authorInput.value.trim() !== currentUsername;
+          if (profileLoadUsernameRevision === usernameRevision) {
+            currentUsername = profile.username || currentUser.email?.split("@")[0] || "사용자";
+          }
           currentAvatarUrl = profile.avatar_url || null;
           userDisplay.textContent = currentUsername;
           renderUserAvatar(currentAvatarUrl);
-          workLogForm.elements.namedItem("author").value = currentUsername;
+          if (!authorWasEdited) {
+            authorInput.value = currentUsername;
+          }
           await refreshWorkLogs();
         } catch (error) {
           if (requestId !== authSessionRequestId) {
             return;
           }
           console.error("Unable to initialize user profile or load work logs from Supabase.", error);
-          currentUsername = currentUsername || currentUser.email?.split("@")[0] || currentUser.id;
+          currentUsername = currentUsername || currentUser.email?.split("@")[0] || "사용자";
           userDisplay.textContent = currentUsername;
           renderUserAvatar(currentAvatarUrl);
           workLogForm.elements.namedItem("author").value = currentUsername;
@@ -1317,42 +1360,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
         saveNicknameBtn.disabled = true;
         try {
-          const supabase = supabaseClient;
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (userError) {
-            throw userError;
-          }
-          if (!user) {
-            throw new Error("로그인한 사용자를 확인할 수 없습니다.");
-          }
-
-          const { error } = await supabase
-            .from("users")
-            .upsert(
-              {
-                user_id: user.id,
-                username: newUsername,
-                avatar_url: currentAvatarUrl,
-                updated_at: new Date().toISOString()
-              },
-              { onConflict: "user_id" }
-            );
-          if (error) {
-            throw error;
-          }
-
-          currentUsername = newUsername;
-          userDisplay.textContent = newUsername;
-          workLogForm.elements.namedItem("author").value = currentUsername;
-          workLogs = workLogs.map((log) => ({
-            ...log,
-            users: log.author_uuid === currentUser.id ? { username: currentUsername } : log.users
-          }));
-          renderTable(workLogs);
-          if (selectedReport?.author_uuid === currentUser.id) {
-            selectedReport = { ...selectedReport, users: { username: currentUsername } };
-            renderReportPage(selectedReport);
-          }
+          await saveUsername(newUsername);
           closeNicknameModal();
           await showMessage("닉네임이 저장되었습니다!");
         } catch (error) {
@@ -1485,9 +1493,19 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
+        const enteredUsername = authorInput.value.trim();
+        if (!enteredUsername || enteredUsername.length > 50) {
+          await showMessage("이름은 1자 이상 50자 이하여야 합니다.");
+          authorInput.focus();
+          return;
+        }
+
         const saveButton = event.currentTarget;
         saveButton.disabled = true;
         try {
+          if (enteredUsername !== currentUsername) {
+            await saveUsername(enteredUsername);
+          }
           const payload = toDatabaseWorkLog(getWorkLogData());
           const isEditing = editingLogId !== null;
           const { data, error } = isEditing
