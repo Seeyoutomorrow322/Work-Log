@@ -53,6 +53,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       };
       const workLogSelect = "*";
       const AUTH_CHANGE_KEY = "auth_change";
+      const WORK_LOG_USER_KEY = "work-log-user";
       const PAGE_SLIDE_DURATION = 500;
       const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       let pageTransitionTimeout;
@@ -76,6 +77,32 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
+
+      function clearStoredWorkLogUser() {
+        try {
+          localStorage.removeItem(WORK_LOG_USER_KEY);
+          return true;
+        } catch (error) {
+          console.error("Unable to clear the cached work-log user.", error);
+          return false;
+        }
+      }
+
+      function storeVerifiedWorkLogUser(user, username) {
+        try {
+          localStorage.setItem(WORK_LOG_USER_KEY, JSON.stringify({
+            id: user.id,
+            email: user.email || "",
+            username
+          }));
+          return true;
+        } catch (error) {
+          console.error("Unable to update the cached work-log user.", error);
+          return false;
+        }
+      }
+
+      clearStoredWorkLogUser();
 
       function closeMessageDialog(result) {
         const resolve = resolveMessageDialog;
@@ -230,14 +257,22 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function getAuthenticatedUser() {
-        const { data: { user }, error } = await supabaseClient.auth.getUser();
-        if (error) {
-          throw error;
-        }
+        const user = await getCurrentAuthUser();
         if (!user) {
           throw new Error("로그인한 사용자를 확인할 수 없습니다.");
         }
         return user;
+      }
+
+      async function getCurrentAuthUser() {
+        const { data, error } = await supabaseClient.auth.getUser();
+        if (error?.name === "AuthSessionMissingError") {
+          return null;
+        }
+        if (error) {
+          throw error;
+        }
+        return data.user;
       }
 
       async function loadOrCreateUserProfile(user) {
@@ -296,6 +331,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         accountState.usernameRevision += 1;
         accountState.username = username;
         userDisplay.textContent = username;
+        if (!storeVerifiedWorkLogUser(accountState.user, accountState.username)) {
+          await showMessage("닉네임은 저장했지만 브라우저의 사용자 정보 캐시는 갱신하지 못했습니다.");
+        }
       }
 
       function renderReportPage(log) {
@@ -980,31 +1018,56 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         document.body.classList.remove("is-page-transitioning");
       }
 
-      async function applyAuthSession(session, requestId = ++authSessionRequestId) {
-        const nextUser = session?.user ? await getAuthenticatedUser() : null;
+      function showLoginAfterAuthFailure(error, requestId) {
+        if (requestId !== authSessionRequestId) {
+          return;
+        }
+        console.error("Unable to validate the current authentication user.", error);
+        clearUserScopedData();
+        const cacheCleared = clearStoredWorkLogUser();
+        mainApp.hidden = true;
+        resetAuthScreenState();
+        authForm.hidden = false;
+        forgotPasswordButton.hidden = false;
+        authStatus.textContent = cacheCleared
+          ? "로그인 정보를 확인할 수 없습니다. 다시 로그인해 주세요."
+          : "로그인 정보를 확인할 수 없고 저장된 사용자 정보를 지우지 못했습니다. 브라우저 저장소를 확인해 주세요.";
+      }
+
+      async function applyAuthSession(_session, requestId = ++authSessionRequestId) {
+        let nextUser;
+        try {
+          nextUser = await getCurrentAuthUser();
+        } catch (error) {
+          showLoginAfterAuthFailure(error, requestId);
+          return;
+        }
         if (requestId !== authSessionRequestId) {
           return;
         }
         const isSameAccount = accountState.user?.id === nextUser?.id;
-        if (!isSameAccount) {
+        if (!nextUser || !isSameAccount) {
           clearUserScopedData();
         }
         accountState.user = nextUser;
         showAuthError("");
 
         if (!accountState.user) {
+          const cacheCleared = clearStoredWorkLogUser();
           mainApp.hidden = true;
           resetAuthScreenState();
           authForm.hidden = false;
           forgotPasswordButton.hidden = false;
-          authStatus.textContent = "로그인 후 업무일지를 확인할 수 있습니다.";
+          authStatus.textContent = cacheCleared
+            ? "로그인 후 업무일지를 확인할 수 있습니다."
+            : "로그인된 사용자가 없고 저장된 사용자 정보를 지우지 못했습니다. 브라우저 저장소를 확인해 주세요.";
           return;
         }
 
-        accountState.username = accountState.username || accountState.user.email?.split("@")[0] || "사용자";
-        userDisplay.textContent = accountState.username;
         if (!isSameAccount) {
-          authorInput.value = accountState.username;
+          accountState.username = "";
+          userDisplay.textContent = "";
+          authorInput.value = "";
         }
         if (mainApp.hidden && !authScreen.hidden) {
           playLoginTransition();
@@ -1025,6 +1088,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           accountState.avatarUrl = profile.avatar_url || null;
           userDisplay.textContent = accountState.username;
           renderUserAvatar(accountState.avatarUrl);
+          if (!storeVerifiedWorkLogUser(accountState.user, accountState.username)) {
+            await showMessage("로그인했지만 사용자 정보를 브라우저 저장소에 갱신하지 못했습니다.");
+          }
           if (!isSameAccount) {
             authorInput.value = accountState.username;
           }
@@ -1041,12 +1107,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (profileResult.status === "rejected") {
           const error = profileResult.reason;
           console.error("Unable to initialize the user profile from Supabase.", error);
-          accountState.username = accountState.username || accountState.user.email?.split("@")[0] || "사용자";
-          userDisplay.textContent = accountState.username;
+          clearStoredWorkLogUser();
           renderUserAvatar(accountState.avatarUrl);
-          if (!isSameAccount) {
-            authorInput.value = accountState.username;
-          }
           await showMessage(`사용자 프로필을 불러오지 못했습니다: ${error.message}`);
         }
         if (workLogsResult.status === "rejected") {
@@ -1471,14 +1533,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         }
         window.setTimeout(() => {
           void applyAuthSession(session, requestId).catch((error) => {
-            if (requestId !== authSessionRequestId) {
-              return;
-            }
-            console.error("Unexpected auth session handling failure.", error);
-            authForm.hidden = false;
-            mainApp.hidden = true;
-            authScreen.hidden = false;
-            authStatus.textContent = "로그인 상태를 처리하지 못했습니다. 페이지를 새로고침해 주세요.";
+            showLoginAfterAuthFailure(error, requestId);
           });
         }, 0);
       });
@@ -1487,15 +1542,10 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (event.key !== AUTH_CHANGE_KEY || event.newValue === null) {
           return;
         }
-        void supabaseClient.auth.getSession()
-          .then(({ data, error }) => {
-            if (error) {
-              throw error;
-            }
-            return applyAuthSession(data.session);
-          })
+        const requestId = ++authSessionRequestId;
+        void applyAuthSession(null, requestId)
           .catch((error) => {
-            console.error("Unable to synchronize the authentication state between tabs.", error);
+            showLoginAfterAuthFailure(error, requestId);
           });
       });
 
