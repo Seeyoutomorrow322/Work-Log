@@ -48,6 +48,9 @@ async function initializePasswordReset() {
 if (supabaseClient) {
   resetForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (savePasswordButton.disabled) {
+      return;
+    }
     showResetError("");
     if (!resetForm.reportValidity()) {
       return;

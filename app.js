@@ -51,23 +51,28 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         learning: "learning",
         tomorrowPlan: "tomorrow_plan"
       };
-      const workLogSelect = "*, author_uuid:user_id";
+      const workLogSelect = "*";
       const AUTH_CHANGE_KEY = "auth_change";
       const PAGE_SLIDE_DURATION = 500;
       const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       let pageTransitionTimeout;
       let pageTransitionFrame;
       let authSessionRequestId = 0;
-      let usernameRevision = 0;
-      let currentUser = null;
-      let currentUsername = "";
-      let currentAvatarUrl = null;
-      let workLogs = [];
-      let workLogRequestId = 0;
-      let selectedReport = null;
-      let editingLogId = null;
+      const accountState = {
+        user: null,
+        username: "",
+        avatarUrl: null,
+        usernameRevision: 0
+      };
+      const workLogState = {
+        items: [],
+        requestId: 0,
+        selected: null,
+        editingId: null
+      };
       let isUpdatingPassword = false;
       let isCompletingSignup = false;
+      let pdfDependenciesPromise;
       let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
@@ -114,7 +119,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       function renderUserAvatar(avatarUrl) {
         const image = userProfileTrigger.querySelector(".user-avatar img");
         image.onerror = () => {
-          if (image.src === DEFAULT_AVATAR_SRC || currentAvatarUrl !== avatarUrl) {
+          if (image.src === DEFAULT_AVATAR_SRC || accountState.avatarUrl !== avatarUrl) {
             return;
           }
           image.src = DEFAULT_AVATAR_SRC;
@@ -123,10 +128,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         image.src = avatarUrl || DEFAULT_AVATAR_SRC;
       }
 
-      function toWorkLog(row, userProfile) {
+      function toWorkLog(row) {
         const log = {
           ...row,
-          users: userProfile ? { username: userProfile.username } : null
+          author: /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(row.author || "")
+            ? ""
+            : row.author || ""
         };
         Object.entries(workLogFieldMap).forEach(([formField, databaseField]) => {
           log[formField] = row[databaseField] ?? "";
@@ -139,8 +146,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       function toDatabaseWorkLog(log) {
         const row = {
-          author: currentUser.id,
-          user_id: currentUser.id,
+          author: String(log.author || "").trim(),
+          user_id: accountState.user.id,
           date: log.date || null,
           status: log.status || "진행 중"
         };
@@ -150,26 +157,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         return row;
       }
 
-      async function attachWorkLogUsers(rows) {
-        const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
-        let profilesByUserId = new Map();
-
-        if (userIds.length > 0) {
-          const { data: profiles, error } = await supabaseClient
-            .from("users")
-            .select("user_id, username")
-            .in("user_id", userIds);
-          if (error) {
-            throw error;
-          }
-          profilesByUserId = new Map(profiles.map((profile) => [profile.user_id, profile]));
-        }
-
-        return rows.map((row) => toWorkLog(row, profilesByUserId.get(row.user_id)));
-      }
-
       async function loadWorkLogs() {
-        const requestedUserId = currentUser?.id;
+        const requestedUserId = accountState.user?.id;
         if (!requestedUserId) {
           throw new Error("로그인한 사용자만 업무일지를 불러올 수 있습니다.");
         }
@@ -182,41 +171,41 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (error) {
           throw error;
         }
-        return attachWorkLogUsers(data);
+        return data.map(toWorkLog);
       }
 
       async function refreshWorkLogs() {
-        const requestedUserId = currentUser?.id;
-        const requestId = ++workLogRequestId;
+        const requestedUserId = accountState.user?.id;
+        const requestId = ++workLogState.requestId;
         if (!requestedUserId) {
-          workLogs = [];
-          renderTable(workLogs);
-          return workLogs;
+          workLogState.items = [];
+          renderTable(workLogState.items);
+          return workLogState.items;
         }
 
         const loadedWorkLogs = await loadWorkLogs();
-        if (currentUser?.id !== requestedUserId || requestId !== workLogRequestId) {
-          return workLogs;
+        if (accountState.user?.id !== requestedUserId || requestId !== workLogState.requestId) {
+          return workLogState.items;
         }
-        workLogs = loadedWorkLogs;
-        renderTable(workLogs);
-        return workLogs;
+        workLogState.items = loadedWorkLogs;
+        renderTable(workLogState.items);
+        return workLogState.items;
       }
 
       function clearUserScopedData() {
-        workLogRequestId += 1;
-        currentUser = null;
-        currentUsername = "";
-        currentAvatarUrl = null;
-        workLogs = [];
-        selectedReport = null;
-        editingLogId = null;
+        workLogState.requestId += 1;
+        accountState.user = null;
+        accountState.username = "";
+        accountState.avatarUrl = null;
+        workLogState.items = [];
+        workLogState.selected = null;
+        workLogState.editingId = null;
         userDisplay.textContent = "";
         renderUserAvatar(null);
         closeProfileDropdown();
         workLogForm.reset();
         workLogForm.elements.namedItem("author").value = "";
-        renderTable(workLogs);
+        renderTable(workLogState.items);
         renderReportPage(null);
       }
 
@@ -230,10 +219,10 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       function resetWorkLogEditor() {
-        editingLogId = null;
+        workLogState.editingId = null;
         workLogForm.reset();
         dateInput.value = getToday();
-        workLogForm.elements.namedItem("author").value = currentUsername;
+        authorInput.value = accountState.username;
       }
 
       function getWorkLogData() {
@@ -285,7 +274,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       }
 
       async function saveUsername(username) {
-        if (!currentUser?.id) {
+        if (!accountState.user?.id) {
           throw new Error("로그인한 사용자를 확인할 수 없습니다.");
         }
 
@@ -293,9 +282,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           .from("users")
           .upsert(
             {
-              user_id: currentUser.id,
+              user_id: accountState.user.id,
               username,
-              avatar_url: currentAvatarUrl,
+              avatar_url: accountState.avatarUrl,
               updated_at: new Date().toISOString()
             },
             { onConflict: "user_id" }
@@ -304,19 +293,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           throw error;
         }
 
-        usernameRevision += 1;
-        currentUsername = username;
+        accountState.usernameRevision += 1;
+        accountState.username = username;
         userDisplay.textContent = username;
-        workLogForm.elements.namedItem("author").value = username;
-        workLogs = workLogs.map((log) => ({
-          ...log,
-          users: log.author_uuid === currentUser.id ? { username } : log.users
-        }));
-        renderTable(workLogs);
-        if (selectedReport?.author_uuid === currentUser.id) {
-          selectedReport = { ...selectedReport, users: { username } };
-          renderReportPage(selectedReport);
-        }
       }
 
       function renderReportPage(log) {
@@ -327,11 +306,11 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           const emptyMessage = document.createElement("p");
           emptyMessage.textContent = "표시할 업무일지가 없습니다. / 暂无可显示的工作日志。";
           previewCard.append(emptyMessage);
-          selectedReport = null;
+          workLogState.selected = null;
           return;
         }
 
-        selectedReport = log;
+        workLogState.selected = log;
 
         const brand = document.createElement("p");
         brand.className = "report-brand";
@@ -343,7 +322,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         const meta = document.createElement("div");
         meta.className = "report-meta";
         [
-          ["작성자", log.users?.username || "未知用户"],
+          ["작성자", log.author || "未知用户"],
           ["작성일", log.date],
           ["상태", log.status]
         ].forEach(([label, value]) => {
@@ -379,10 +358,56 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         previewCard.append(brand, title, meta, divider, workList);
       }
 
+      function loadExternalScript(src, isLoaded) {
+        if (isLoaded()) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = src;
+          script.async = true;
+          script.addEventListener("load", resolve, { once: true });
+          script.addEventListener("error", () => {
+            script.remove();
+            reject(new Error(`Unable to load required PDF dependency: ${src}`));
+          }, { once: true });
+          document.head.append(script);
+        }).then(() => {
+          if (!isLoaded()) {
+            throw new Error(`PDF dependency did not initialize correctly: ${src}`);
+          }
+        });
+      }
+
+      function loadPdfDependencies() {
+        if (typeof window.html2canvas === "function" &&
+            typeof window.jspdf?.jsPDF === "function") {
+          return Promise.resolve();
+        }
+        if (!pdfDependenciesPromise) {
+          pdfDependenciesPromise = Promise.all([
+            loadExternalScript(
+              "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+              () => typeof window.html2canvas === "function"
+            ),
+            loadExternalScript(
+              "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+              () => typeof window.jspdf?.jsPDF === "function"
+            )
+          ]).catch((error) => {
+            pdfDependenciesPromise = null;
+            throw error;
+          });
+        }
+        return pdfDependenciesPromise;
+      }
+
       async function exportPDF() {
         if (typeof window.html2canvas !== "function") {
           throw new Error("html2canvas 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
         }
+
         const { jsPDF } = window.jspdf || {};
         if (typeof jsPDF !== "function") {
           throw new Error("jsPDF 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
@@ -688,7 +713,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         const dateCell = document.createElement("td");
         dateCell.textContent = String(log.date || "").replaceAll("-", ".") || "—";
         const authorCell = document.createElement("td");
-        authorCell.textContent = log.users?.username || "未知用户";
+        authorCell.textContent = log.author || "未知用户";
         const workCell = document.createElement("td");
         workCell.textContent = log.completedWork || log.assignedWork || "—";
         const statusCell = document.createElement("td");
@@ -699,7 +724,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         statusCell.append(status);
 
         const actionsCell = document.createElement("td");
-        const isOwnLog = Boolean(currentUser?.id && log.user_id === currentUser.id);
+        const isOwnLog = Boolean(accountState.user?.id && log.user_id === accountState.user.id);
         if (isOwnLog) {
           const viewButton = document.createElement("button");
           viewButton.className = "view-link";
@@ -718,15 +743,15 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         return row;
       }
 
-      function renderTable(logs = workLogs) {
-        const visibleLogs = currentUser?.id
-          ? logs.filter((log) => log.user_id === currentUser.id)
+      function renderTable(logs = workLogState.items) {
+        const visibleLogs = accountState.user?.id
+          ? logs.filter((log) => log.user_id === accountState.user.id)
           : [];
 
         document.querySelectorAll("[data-log-table]").forEach((tableBody) => {
           const rows = [];
           for (const log of visibleLogs) {
-            if (!currentUser?.id || log.user_id !== currentUser.id) {
+            if (!accountState.user?.id || log.user_id !== accountState.user.id) {
               continue;
             }
             rows.push(createLogRow(log));
@@ -757,7 +782,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
-        if (!currentUser) {
+        if (!accountState.user) {
           clearUserScopedData();
           mainApp.hidden = true;
           resetAuthScreenState();
@@ -767,9 +792,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
-        if (pageId === "page-dashboard" && currentUser) {
-          workLogs = [];
-          renderTable(workLogs);
+        if (pageId === "page-dashboard" && accountState.user) {
           void refreshWorkLogs().catch(async (error) => {
             console.error("Unable to refresh dashboard work logs.", error);
             await showMessage(`업무일지를 불러오지 못했습니다: ${error.message}`);
@@ -778,7 +801,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
         finishPageTransition();
         const currentPage = document.querySelector(".page-content.is-active");
-        renderTable(workLogs);
+        renderTable(workLogState.items);
 
         const currentPageIndex = Array.from(navigationItems).findIndex(
           (item) => item.dataset.navTarget === currentPage?.id
@@ -831,7 +854,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         });
 
         if (pageId === "page-report") {
-          renderReportPage(workLogs[0] || null);
+          renderReportPage(workLogState.items[0] || null);
         }
 
         const title = targetPage.querySelector(".page-title")?.textContent.trim();
@@ -962,11 +985,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (requestId !== authSessionRequestId) {
           return;
         }
-        clearUserScopedData();
-        currentUser = nextUser;
+        const isSameAccount = accountState.user?.id === nextUser?.id;
+        if (!isSameAccount) {
+          clearUserScopedData();
+        }
+        accountState.user = nextUser;
         showAuthError("");
 
-        if (!currentUser) {
+        if (!accountState.user) {
           mainApp.hidden = true;
           resetAuthScreenState();
           authForm.hidden = false;
@@ -975,56 +1001,74 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
 
-        currentUsername = currentUser.email?.split("@")[0] || "사용자";
-        userDisplay.textContent = currentUsername;
-        workLogForm.elements.namedItem("author").value = currentUsername;
+        accountState.username = accountState.username || accountState.user.email?.split("@")[0] || "사용자";
+        userDisplay.textContent = accountState.username;
+        if (!isSameAccount) {
+          authorInput.value = accountState.username;
+        }
         if (mainApp.hidden && !authScreen.hidden) {
           playLoginTransition();
         } else {
           authScreen.hidden = true;
           mainApp.hidden = false;
         }
-        try {
-          const profileLoadUsernameRevision = usernameRevision;
-          const profile = await loadOrCreateUserProfile(currentUser);
-          if (requestId !== authSessionRequestId || currentUser?.id !== nextUser.id) {
+
+        const profileLoadUsernameRevision = accountState.usernameRevision;
+        const profileRequest = (async () => {
+          const profile = await loadOrCreateUserProfile(accountState.user);
+          if (requestId !== authSessionRequestId || accountState.user?.id !== nextUser.id) {
             return;
           }
-          const authorWasEdited = authorInput.value.trim() !== currentUsername;
-          if (profileLoadUsernameRevision === usernameRevision) {
-            currentUsername = profile.username || currentUser.email?.split("@")[0] || "사용자";
+          if (profileLoadUsernameRevision === accountState.usernameRevision) {
+            accountState.username = profile.username || accountState.user.email?.split("@")[0] || "사용자";
           }
-          currentAvatarUrl = profile.avatar_url || null;
-          userDisplay.textContent = currentUsername;
-          renderUserAvatar(currentAvatarUrl);
-          if (!authorWasEdited) {
-            authorInput.value = currentUsername;
+          accountState.avatarUrl = profile.avatar_url || null;
+          userDisplay.textContent = accountState.username;
+          renderUserAvatar(accountState.avatarUrl);
+          if (!isSameAccount) {
+            authorInput.value = accountState.username;
           }
-          await refreshWorkLogs();
-        } catch (error) {
-          if (requestId !== authSessionRequestId) {
-            return;
+        })();
+        const workLogsRequest = refreshWorkLogs();
+        const [profileResult, workLogsResult] = await Promise.allSettled([
+          profileRequest,
+          workLogsRequest
+        ]);
+        if (requestId !== authSessionRequestId) {
+          return;
+        }
+
+        if (profileResult.status === "rejected") {
+          const error = profileResult.reason;
+          console.error("Unable to initialize the user profile from Supabase.", error);
+          accountState.username = accountState.username || accountState.user.email?.split("@")[0] || "사용자";
+          userDisplay.textContent = accountState.username;
+          renderUserAvatar(accountState.avatarUrl);
+          if (!isSameAccount) {
+            authorInput.value = accountState.username;
           }
-          console.error("Unable to initialize user profile or load work logs from Supabase.", error);
-          currentUsername = currentUsername || currentUser.email?.split("@")[0] || "사용자";
-          userDisplay.textContent = currentUsername;
-          renderUserAvatar(currentAvatarUrl);
-          workLogForm.elements.namedItem("author").value = currentUsername;
-          await showMessage(`사용자 프로필 또는 업무일지를 불러오지 못했습니다: ${error.message}`);
-          workLogs = [];
-          renderTable([]);
+          await showMessage(`사용자 프로필을 불러오지 못했습니다: ${error.message}`);
+        }
+        if (workLogsResult.status === "rejected") {
+          const error = workLogsResult.reason;
+          console.error("Unable to load work logs from Supabase.", error);
+          await showMessage(`업무일지를 불러오지 못했습니다: ${error.message}`);
+          renderTable(workLogState.items);
         }
       }
 
       authForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const submitButton = document.querySelector("#login-button");
+        if (submitButton.disabled) {
+          return;
+        }
         showAuthError("");
         const validationMessage = getAuthValidationMessage();
         if (validationMessage) {
           showAuthError(validationMessage);
           return;
         }
-        const submitButton = document.querySelector("#login-button");
         submitButton.disabled = true;
         const { email, password } = Object.fromEntries(new FormData(authForm).entries());
         try {
@@ -1059,6 +1103,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       resetEmailForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (sendResetEmailButton.disabled) {
+          return;
+        }
         resetEmailError.textContent = "";
         resetEmailError.hidden = true;
         if (!resetEmailForm.reportValidity()) {
@@ -1088,6 +1135,10 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       document.querySelector("#signup-button").addEventListener("click", async () => {
+        const signupButton = document.querySelector("#signup-button");
+        if (signupButton.disabled || isCompletingSignup) {
+          return;
+        }
         showAuthError("");
         const validationMessage = getAuthValidationMessage();
         if (validationMessage) {
@@ -1097,7 +1148,6 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         const email = document.querySelector("#auth-email").value.trim();
         const password = document.querySelector("#auth-password").value;
 
-        const signupButton = document.querySelector("#signup-button");
         signupButton.disabled = true;
         isCompletingSignup = true;
         try {
@@ -1182,7 +1232,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       document.querySelector("#btnChangeUsername").addEventListener("click", () => {
         closeProfileDropdown();
         showUsernameError("");
-        nicknameInput.value = currentUsername;
+        nicknameInput.value = accountState.username;
         nicknameModalOverlay.style.display = "flex";
         nicknameInput.focus();
       });
@@ -1210,6 +1260,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       passwordForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (savePasswordBtn.disabled || isUpdatingPassword) {
+          return;
+        }
         showPasswordError("");
         const { currentPassword, newPassword, confirmPassword } =
           Object.fromEntries(new FormData(passwordForm).entries());
@@ -1221,7 +1274,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           showPasswordError("현재 비밀번호와 다른 비밀번호를 입력해 주세요.");
           return;
         }
-        if (!currentUser?.email) {
+        if (!accountState.user?.email) {
           showPasswordError("이 계정은 이메일 비밀번호 인증을 사용할 수 없습니다.");
           return;
         }
@@ -1230,7 +1283,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         isUpdatingPassword = true;
         try {
           const { error: verificationError } = await supabaseClient.auth.signInWithPassword({
-            email: currentUser.email,
+            email: accountState.user.email,
             password: String(currentPassword)
           });
           if (verificationError) {
@@ -1318,8 +1371,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             throw new Error("프로필 사진 URL이 사용자 프로필에 저장되지 않았습니다.");
           }
 
-          currentAvatarUrl = updatedProfile.avatar_url;
-          renderUserAvatar(currentAvatarUrl);
+          accountState.avatarUrl = updatedProfile.avatar_url;
+          renderUserAvatar(accountState.avatarUrl);
           await showMessage("프로필 사진이 변경되었습니다.");
         } catch (error) {
           console.error("Unable to upload the profile photo.", error);
@@ -1351,6 +1404,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       nicknameForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (saveNicknameBtn.disabled) {
+          return;
+        }
         showUsernameError("");
         const newUsername = nicknameInput.value.trim();
         if (!newUsername || newUsername.length > 50) {
@@ -1371,7 +1427,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         }
       });
 
-      document.querySelector("#btnLogout").addEventListener("click", async () => {
+      const logoutButton = document.querySelector("#btnLogout");
+      logoutButton.addEventListener("click", async () => {
+        if (logoutButton.disabled) {
+          return;
+        }
+        logoutButton.disabled = true;
         closeProfileDropdown();
         try {
           const { error } = await supabaseClient.auth.signOut();
@@ -1388,6 +1449,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         } catch (error) {
           console.error("Supabase sign-out failed.", error);
           await showMessage(`로그아웃하지 못했습니다: ${error.message}`);
+        } finally {
+          logoutButton.disabled = false;
         }
       });
 
@@ -1396,7 +1459,9 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           return;
         }
         const requestId = ++authSessionRequestId;
-        clearUserScopedData();
+        if (accountState.user?.id !== (session?.user?.id ?? null)) {
+          clearUserScopedData();
+        }
         if (!session?.user) {
           mainApp.hidden = true;
           resetAuthScreenState();
@@ -1422,64 +1487,83 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         if (event.key !== AUTH_CHANGE_KEY || event.newValue === null) {
           return;
         }
-        clearUserScopedData();
-        window.location.reload();
+        void supabaseClient.auth.getSession()
+          .then(({ data, error }) => {
+            if (error) {
+              throw error;
+            }
+            return applyAuthSession(data.session);
+          })
+          .catch((error) => {
+            console.error("Unable to synchronize the authentication state between tabs.", error);
+          });
       });
+
+      async function deleteWorkLog(deleteButton) {
+        if (!(await showMessage("정말 삭제하시겠습니까?", true))) {
+          return;
+        }
+
+        const logId = deleteButton.dataset.id;
+        const workLog = workLogState.items.find((log) => String(log.id) === logId);
+        if (!workLog) {
+          console.error(`No work log found for ID: ${logId}`);
+          return;
+        }
+        if (!accountState.user?.id) {
+          await showMessage("로그인 후 업무일지를 삭제할 수 있습니다.");
+          return;
+        }
+        if (workLog.user_id !== accountState.user.id) {
+          await showMessage("다른 사용자의 업무일지는 삭제할 수 없습니다.");
+          return;
+        }
+
+        try {
+          const { data: deletedLog, error } = await supabaseClient
+            .from("work_logs")
+            .delete()
+            .eq("id", logId)
+            .eq("user_id", accountState.user.id)
+            .select("id")
+            .maybeSingle();
+          if (error) {
+            throw error;
+          }
+          if (!deletedLog) {
+            throw new Error("삭제 권한이 없거나 업무일지가 삭제되지 않았습니다. 본인이 작성한 일지만 삭제할 수 있습니다.");
+          }
+          try {
+            await refreshWorkLogs();
+          } catch (refreshError) {
+            console.error("Work log was deleted, but the list could not be refreshed.", refreshError);
+            await showMessage(`업무일지는 삭제되었지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
+          }
+        } catch (error) {
+          console.error("Unable to delete work log.", error);
+          await showMessage(`삭제 실패: ${error.message || "업무일지를 삭제하지 못했습니다. 권한을 확인해 주세요."}`);
+        }
+      }
 
       document.addEventListener("click", async (event) => {
         const deleteButton = event.target.closest(".btn-delete");
         if (deleteButton) {
           event.preventDefault();
-          if (!(await showMessage("정말 삭제하시겠습니까?", true))) {
+          if (deleteButton.disabled) {
             return;
           }
-
-          const logId = deleteButton.dataset.id;
-          const workLog = workLogs.find((log) => String(log.id) === logId);
-          if (!workLog) {
-            console.error(`No work log found for ID: ${logId}`);
-            return;
-          }
-          if (!currentUser?.id) {
-            await showMessage("로그인 후 업무일지를 삭제할 수 있습니다.");
-            return;
-          }
-          if (workLog.user_id !== currentUser.id) {
-            await showMessage("다른 사용자의 업무일지는 삭제할 수 없습니다.");
-            return;
-          }
-
+          deleteButton.disabled = true;
           try {
-            const { data: deletedLog, error } = await supabaseClient
-              .from("work_logs")
-              .delete()
-              .eq("id", logId)
-              .eq("user_id", currentUser.id)
-              .select("id")
-              .maybeSingle();
-            if (error) {
-              throw error;
-            }
-            if (!deletedLog) {
-              throw new Error("삭제 권한이 없거나 업무일지가 삭제되지 않았습니다. 본인이 작성한 일지만 삭제할 수 있습니다.");
-            }
-            try {
-              await refreshWorkLogs();
-            } catch (refreshError) {
-              console.error("Work log was deleted, but the list could not be refreshed.", refreshError);
-              await showMessage(`업무일지는 삭제되었지만 목록을 새로고침하지 못했습니다: ${refreshError.message}`);
-            }
-          } catch (error) {
-            console.error("Unable to delete work log.", error);
-            await showMessage(`삭제 실패: ${error.message || "업무일지를 삭제하지 못했습니다. 권한을 확인해 주세요."}`);
-            return;
+            await deleteWorkLog(deleteButton);
+          } finally {
+            deleteButton.disabled = false;
           }
           return;
         }
 
         const viewButton = event.target.closest("[data-view-log]");
         if (viewButton) {
-          const log = workLogs.find((item) => String(item.id) === viewButton.dataset.viewLog);
+          const log = workLogState.items.find((item) => String(item.id) === viewButton.dataset.viewLog);
           if (log) {
             switchPage("page-report");
             renderReportPage(log);
@@ -1488,31 +1572,32 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       document.querySelector("#save-demo-button").addEventListener("click", async (event) => {
-        if (!currentUser) {
-          await showMessage("업무일지를 저장하려면 먼저 로그인해 주세요.");
-          return;
-        }
-
-        const enteredUsername = authorInput.value.trim();
-        if (!enteredUsername || enteredUsername.length > 50) {
-          await showMessage("이름은 1자 이상 50자 이하여야 합니다.");
-          authorInput.focus();
-          return;
-        }
-
         const saveButton = event.currentTarget;
+        if (saveButton.disabled) {
+          return;
+        }
         saveButton.disabled = true;
         try {
-          if (enteredUsername !== currentUsername) {
-            await saveUsername(enteredUsername);
+          if (!accountState.user) {
+            await showMessage("업무일지를 저장하려면 먼저 로그인해 주세요.");
+            return;
           }
+
+          const enteredUsername = authorInput.value.trim();
+          if (!enteredUsername || enteredUsername.length > 50) {
+            await showMessage("이름은 1자 이상 50자 이하여야 합니다.");
+            authorInput.focus();
+            return;
+          }
+
           const payload = toDatabaseWorkLog(getWorkLogData());
-          const isEditing = editingLogId !== null;
+          const isEditing = workLogState.editingId !== null;
           const { data, error } = isEditing
             ? await supabaseClient
                 .from("work_logs")
                 .update(payload)
-                .eq("id", editingLogId)
+                .eq("id", workLogState.editingId)
+                .eq("user_id", accountState.user.id)
                 .select(workLogSelect)
                 .single()
             : await supabaseClient
@@ -1524,7 +1609,7 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             throw error;
           }
 
-          const savedLog = toWorkLog(data, { username: currentUsername });
+          const savedLog = toWorkLog(data);
           resetWorkLogEditor();
           try {
             await refreshWorkLogs();
@@ -1545,8 +1630,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       document.querySelector("#preview-button").addEventListener("click", () => {
         const previewData = getWorkLogData();
-        if (editingLogId !== null) {
-          previewData.id = editingLogId;
+        if (workLogState.editingId !== null) {
+          previewData.id = workLogState.editingId;
         }
         switchPage("page-report");
         renderReportPage(previewData);
@@ -1559,13 +1644,14 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       const exportPdfButton = document.querySelector("#export-pdf-button");
       exportPdfButton.addEventListener("click", async () => {
-        if (!selectedReport) {
+        if (!workLogState.selected) {
           await showMessage("내보낼 업무 일지를 찾을 수 없습니다.");
           return;
         }
 
         exportPdfButton.disabled = true;
         try {
+          await loadPdfDependencies();
           await exportPDF();
         } catch (error) {
           console.error("Unable to export work log to PDF.", error);
@@ -1577,7 +1663,10 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 
       const completeWorkButton = document.querySelector("#complete-work-button");
       completeWorkButton.addEventListener("click", async () => {
-        if (!selectedReport || selectedReport.id === undefined) {
+        if (completeWorkButton.disabled) {
+          return;
+        }
+        if (!workLogState.selected || workLogState.selected.id === undefined) {
           await showMessage("완료 처리할 업무일지를 찾을 수 없습니다. 먼저 업무일지를 저장해 주세요.");
           return;
         }
@@ -1587,7 +1676,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
           const { data, error } = await supabaseClient
             .from("work_logs")
             .update({ status: "완료" })
-            .eq("id", selectedReport.id)
+            .eq("id", workLogState.selected.id)
+            .eq("user_id", accountState.user.id)
             .select("id, status")
             .maybeSingle();
           if (error) {
@@ -1598,8 +1688,8 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             return;
           }
 
-          selectedReport = { ...selectedReport, status: data.status };
-          renderReportPage(selectedReport);
+          workLogState.selected = { ...workLogState.selected, status: data.status };
+          renderReportPage(workLogState.selected);
           try {
             await refreshWorkLogs();
           } catch (refreshError) {
@@ -1617,13 +1707,13 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       });
 
       document.querySelector("#edit-report-button").addEventListener("click", () => {
-        if (!selectedReport) {
+        if (!workLogState.selected) {
           switchPage("page-editor");
           return;
         }
 
-        editingLogId = selectedReport.id ?? null;
-        Object.entries(selectedReport).forEach(([name, value]) => {
+        workLogState.editingId = workLogState.selected.id ?? null;
+        Object.entries(workLogState.selected).forEach(([name, value]) => {
           const field = workLogForm.elements.namedItem(name);
           if (field && typeof value === "string") {
             field.value = value;

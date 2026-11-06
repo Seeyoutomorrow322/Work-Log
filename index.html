@@ -7,11 +7,8 @@
     <meta name="description" content="업무일지 전체 현황 / Daily Work Log Dashboard / 工作日志仪表盘">
     <title>전체 현황 · Dashboard · 仪表盘</title>
     <link rel="stylesheet" href="style.css?v=sidebar-slide-direction">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   </head>
   <body>
     <p id="supabase-sdk-error" class="dependency-error-banner" role="alert" hidden>
@@ -237,7 +234,7 @@
             <form class="editor-form" id="work-log-form" novalidate>
               <div class="form-grid">
                 <div class="field">
-                  <label class="field-label" for="author">로그인 사용자<small>Signed-in user / 登录用户</small></label>
+                  <label class="field-label" for="author">일지 작성자<small>Log author / 日志填写者</small></label>
                   <input class="field-control" id="author" name="author" type="text" maxlength="50" autocomplete="nickname" required>
                 </div>
                 <div class="field">
@@ -491,6 +488,6 @@
         </div>
       </div>
     </dialog>
-    <script src="app.js?v=preserve-active-page-after-auth-load" defer></script>
+    <script src="app.js?v=preserve-session-data-and-lazy-pdf" defer></script>
   </body>
 </html>

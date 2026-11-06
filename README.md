@@ -8,7 +8,7 @@ Supabase를 통해 사용자 인증, 데이터베이스, 프로필 이미지 저
 - 업무일지를 생성, 조회, 수정 및 삭제할 수 있습니다. (Create, view, edit, and delete work logs.)
 - 대시보드에서 업무일지와 상태를 요약하고 날짜별로 확인할 수 있습니다. (Review work-log summaries and statuses on the dashboard, and browse logs by date.)
 - 사용자 닉네임과 프로필 이미지를 관리할 수 있습니다. (Manage user nicknames and profile images.)
-- 업무일지 상세 내용을 미리 보고, 완료 처리된 일지를 PDF로 내보낼 수 있습니다. (Preview work-log details and export completed logs as PDF.)
+- 업무일지 상세 내용을 미리 보고, 업무일지를 PDF로 내보낼 수 있습니다. (Preview work-log details and export work logs as PDF.)
 - 한국어, 중국어, 영어가 혼합된 인터페이스를 제공합니다. (Provides an interface that combines Korean, Chinese, and English.)
 
 ## 디렉터리 구조 (Directory Structure)
@@ -26,7 +26,7 @@ Supabase를 통해 사용자 인증, 데이터베이스, 프로필 이미지 저
     └── login-illustration-hd.png # 로그인 페이지에서 사용하는 고해상도 일러스트 (High-resolution illustration used on the sign-in page)
 ```
 
-애플리케이션은 CDN을 통해 Supabase JS, html2canvas, jsPDF를 불러옵니다. 현재 저장소에는 npm 빌드 스크립트, Supabase CLI 설정 또는 데이터베이스 마이그레이션 파일이 없습니다. (The app loads Supabase JS, html2canvas, and jsPDF from CDNs. The repository currently has no npm build scripts, Supabase CLI configuration, or database migration files.)
+애플리케이션은 CDN을 통해 Supabase JS를 불러오며, PDF 내보내기 시 html2canvas와 jsPDF를 추가로 불러옵니다. 현재 저장소에는 npm 빌드 스크립트, Supabase CLI 설정 또는 데이터베이스 마이그레이션 파일이 없습니다. (The app loads Supabase JS from a CDN and loads html2canvas and jsPDF on demand when exporting a PDF. The repository currently has no npm build scripts, Supabase CLI configuration, or database migration files.)
 
 ## 로컬 실행 (Local Development)
 
@@ -213,7 +213,7 @@ create policy "Users can delete avatars in their own folder"
 
 - 실행 날짜 / 빌드 또는 배포 버전: 2026-11-04
 - 브라우저 및 버전: Microsoft Edge 156.0.4314.58 (공식 버전) (64비트)
-- 테스트 계정 및 데이터(민감정보 제외): 13944346515@qq.com
+- 테스트 계정 및 데이터(민감정보 제외): 테스트 전용 계정 (개인정보 미기재)
 
 **1. PDF 다운로드 및 기능 분리 테스트 성공**
 
