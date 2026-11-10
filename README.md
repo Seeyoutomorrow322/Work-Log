@@ -26,7 +26,7 @@ Supabase를 통해 사용자 인증, 데이터베이스, 프로필 이미지 저
     └── login-illustration-hd.png # 로그인 페이지에서 사용하는 고해상도 일러스트 (High-resolution illustration used on the sign-in page)
 ```
 
-애플리케이션은 CDN을 통해 Supabase JS를 불러오며, PDF 내보내기 시 html2canvas와 jsPDF를 추가로 불러옵니다. 현재 저장소에는 npm 빌드 스크립트, Supabase CLI 설정 또는 데이터베이스 마이그레이션 파일이 없습니다. (The app loads Supabase JS from a CDN and loads html2canvas and jsPDF on demand when exporting a PDF. The repository currently has no npm build scripts, Supabase CLI configuration, or database migration files.)
+애플리케이션은 CDN을 통해 Supabase JS를 불러오며, PDF 내보내기 시 html2canvas와 jsPDF를 추가로 불러옵니다. PDF 페이지는 html2canvas(`scale: 1.5`)로 캡처한 뒤 JPEG(품질 0.75)로 변환하며, jsPDF는 `compress: true`로 저장합니다. 결과 파일이 5MB를 넘으면 `scale: 1.2` / 품질 0.6으로 한 번 더 렌더링하고, 내보내기 복제본의 이미지는 최대 폭 1400px로 제한합니다. (The app loads Supabase JS from a CDN and loads html2canvas and jsPDF on demand when exporting a PDF. Pages are captured with html2canvas at `scale: 1.5`, embedded as JPEG at quality 0.75, and saved with jsPDF `compress: true`. If the result exceeds 5MB it re-renders once at `scale: 1.2` / quality 0.6, and images in the export clone are capped at 1400px wide.) 현재 저장소에는 npm 빌드 스크립트, Supabase CLI 설정 또는 데이터베이스 마이그레이션 파일이 없습니다. (The repository currently has no npm build scripts, Supabase CLI configuration, or database migration files.)
 
 ## 로컬 실행 (Local Development)
 

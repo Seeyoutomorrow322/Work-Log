@@ -74,6 +74,12 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
       let isUpdatingPassword = false;
       let isCompletingSignup = false;
       let pdfDependenciesPromise;
+      const PDF_IMAGE_MAX_WIDTH_PX = 1400;
+      const PDF_EXPORT_MAX_BYTES = 5 * 1024 * 1024;
+      const PDF_EXPORT_QUALITY_STEPS = [
+        { scale: 1.5, quality: 0.75 },
+        { scale: 1.2, quality: 0.6 }
+      ];
       let authSuccessToastTimeout;
       let resolveMessageDialog = null;
       let messageDialogQueue = Promise.resolve();
@@ -441,6 +447,152 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         return pdfDependenciesPromise;
       }
 
+      function captureReportCanvas(exportClone, scale) {
+        return window.html2canvas(exportClone, {
+          scale,
+          useCORS: true,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: Math.ceil(exportClone.scrollWidth),
+          windowHeight: Math.ceil(exportClone.scrollHeight),
+          backgroundColor: null,
+          onclone: (clonedDocument) => {
+            const clonedContainer = clonedDocument.querySelector("#pdf-export-container");
+            clonedContainer.style.setProperty("visibility", "visible", "important");
+          }
+        }).then((canvas) => {
+          if (canvas.width === 0 || canvas.height === 0) {
+            throw new Error("보고서 내용을 이미지로 렌더링하지 못했습니다.");
+          }
+          return canvas;
+        });
+      }
+
+      function renderPdfDocument(canvas, options) {
+        const {
+          createPdfDocument,
+          pageWidth,
+          pageHeight,
+          margin,
+          imgWidth,
+          cssPixelsPerMm,
+          quality
+        } = options;
+        const pdf = createPdfDocument();
+        const maxPageImageHeight = pageHeight - margin * 2;
+        const pixelsPerMm = canvas.width / imgWidth;
+        const maxSliceHeight = Math.max(1, Math.floor(maxPageImageHeight * pixelsPerMm));
+        const pageCanvasWidth = Math.ceil(pageWidth * pixelsPerMm);
+        const pageCanvasHeight = Math.ceil(pageHeight * pixelsPerMm);
+        const pageMarginPx = margin * pixelsPerMm;
+        const cardWidthPx = imgWidth * pixelsPerMm;
+        const cardHeightPx = maxPageImageHeight * pixelsPerMm;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) {
+          throw new Error("PDF 페이지 분할을 위한 Canvas 컨텍스트를 생성하지 못했습니다.");
+        }
+
+        let sourceY = 0;
+        let pageNumber = 0;
+        while (sourceY < canvas.height) {
+          const targetY = Math.min(sourceY + maxSliceHeight, canvas.height);
+          let sliceEndY = targetY;
+          if (targetY < canvas.height) {
+            const searchStartY = Math.max(sourceY + 1, targetY - Math.floor(40 * pixelsPerMm));
+            const searchHeight = targetY - searchStartY;
+            if (searchHeight > 0) {
+              const imageData = context.getImageData(0, searchStartY, canvas.width, searchHeight);
+              for (let row = searchHeight - 1; row >= 0; row -= 1) {
+                let hasInk = false;
+                for (let x = 0; x < canvas.width; x += 1) {
+                  const pixelIndex = (row * canvas.width + x) * 4;
+                  if (
+                    imageData.data[pixelIndex + 3] > 0 &&
+                    (
+                      imageData.data[pixelIndex] < 245 ||
+                      imageData.data[pixelIndex + 1] < 245 ||
+                      imageData.data[pixelIndex + 2] < 245
+                    )
+                  ) {
+                    hasInk = true;
+                    break;
+                  }
+                }
+                if (!hasInk) {
+                  sliceEndY = searchStartY + row + 1;
+                  break;
+                }
+              }
+            }
+          }
+
+          const sliceHeight = Math.max(1, sliceEndY - sourceY);
+          const pageCanvas = document.createElement("canvas");
+          pageCanvas.width = pageCanvasWidth;
+          pageCanvas.height = pageCanvasHeight;
+          const pageContext = pageCanvas.getContext("2d");
+          if (!pageContext) {
+            throw new Error("PDF 페이지 이미지를 생성하지 못했습니다.");
+          }
+          pageContext.fillStyle = "#e8e9e7";
+          pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          pageContext.save();
+          pageContext.fillStyle = "rgba(91, 101, 101, 0.10)";
+          pageContext.beginPath();
+          pageContext.moveTo(0, pageCanvas.height * 0.68);
+          pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.55);
+          pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.69);
+          pageContext.lineTo(0, pageCanvas.height * 0.84);
+          pageContext.closePath();
+          pageContext.fill();
+          pageContext.fillStyle = "rgba(255, 255, 255, 0.55)";
+          pageContext.beginPath();
+          pageContext.moveTo(0, pageCanvas.height * 0.78);
+          pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.88);
+          pageContext.lineTo(pageCanvas.width, pageCanvas.height);
+          pageContext.lineTo(0, pageCanvas.height * 0.90);
+          pageContext.closePath();
+          pageContext.fill();
+          pageContext.restore();
+
+          const cardX = pageMarginPx;
+          const cardY = pageMarginPx;
+          const cardRadius = 16 * pixelsPerMm / cssPixelsPerMm;
+          pageContext.save();
+          pageContext.shadowColor = "rgba(39, 54, 60, 0.12)";
+          pageContext.shadowBlur = 12 * pixelsPerMm / cssPixelsPerMm;
+          pageContext.shadowOffsetX = 0;
+          pageContext.shadowOffsetY = 4 * pixelsPerMm / cssPixelsPerMm;
+          pageContext.fillStyle = "#fff";
+          pageContext.beginPath();
+          pageContext.roundRect(cardX, cardY, cardWidthPx, cardHeightPx, cardRadius);
+          pageContext.fill();
+          pageContext.restore();
+
+          pageContext.drawImage(
+            canvas,
+            0, sourceY, canvas.width, sliceHeight,
+            cardX, cardY, canvas.width, sliceHeight
+          );
+
+          if (pageNumber > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(
+            pageCanvas.toDataURL("image/jpeg", quality),
+            "JPEG",
+            0, 0, pageWidth, pageHeight,
+            undefined,
+            "FAST"
+          );
+
+          sourceY = sliceEndY;
+          pageNumber += 1;
+        }
+
+        return pdf;
+      }
+
       async function exportPDF() {
         if (typeof window.html2canvas !== "function") {
           throw new Error("html2canvas 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
@@ -457,9 +609,15 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
         }
 
         await document.fonts.ready;
-        const pdf = new jsPDF("p", "mm", "a4");
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
+        const createPdfDocument = () => new jsPDF({
+          orientation: "p",
+          unit: "mm",
+          format: "a4",
+          compress: true
+        });
+        const pdfMetrics = createPdfDocument();
+        const pageWidth = pdfMetrics.internal.pageSize.getWidth();
+        const pageHeight = pdfMetrics.internal.pageSize.getHeight();
         const margin = 10;
         const imgWidth = pageWidth - margin * 2;
         const cssPixelsPerMm = 96 / 25.4;
@@ -522,6 +680,15 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             "background-color": "#fff",
             "background-image": "none",
             "text-align": "left"
+          });
+        });
+
+        exportClone.querySelectorAll("img").forEach((image) => {
+          const naturalWidth = image.naturalWidth || 0;
+          setImportantStyles(image, {
+            width: naturalWidth > 0 ? `${Math.min(naturalWidth, PDF_IMAGE_MAX_WIDTH_PX)}px` : "auto",
+            height: "auto",
+            "object-fit": "contain"
           });
         });
 
@@ -606,126 +773,21 @@ const DEFAULT_AVATAR_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
             throw new Error("보고서 화면이 표시되지 않아 PDF를 만들 수 없습니다.");
           }
 
-          const canvas = await window.html2canvas(exportClone, {
-            scale: 3,
-            useCORS: true,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: Math.ceil(exportClone.scrollWidth),
-            windowHeight: Math.ceil(exportClone.scrollHeight),
-            backgroundColor: null,
-            onclone: (clonedDocument) => {
-              const clonedContainer = clonedDocument.querySelector("#pdf-export-container");
-              clonedContainer.style.setProperty("visibility", "visible", "important");
+          const pdfOptions = { createPdfDocument, pageWidth, pageHeight, margin, imgWidth, cssPixelsPerMm };
+          let pdf = null;
+          for (let index = 0; index < PDF_EXPORT_QUALITY_STEPS.length; index += 1) {
+            const { scale, quality } = PDF_EXPORT_QUALITY_STEPS[index];
+            const canvas = await captureReportCanvas(exportClone, scale);
+            pdf = renderPdfDocument(canvas, { ...pdfOptions, quality });
+            const fileSize = pdf.output("arraybuffer").byteLength;
+            if (fileSize <= PDF_EXPORT_MAX_BYTES) {
+              break;
             }
-          });
-          if (canvas.width === 0 || canvas.height === 0) {
-            throw new Error("보고서 내용을 이미지로 렌더링하지 못했습니다.");
-          }
-
-          const maxPageImageHeight = pageHeight - margin * 2;
-          const pixelsPerMm = canvas.width / imgWidth;
-          const maxSliceHeight = Math.max(1, Math.floor(maxPageImageHeight * pixelsPerMm));
-          const pageCanvasWidth = Math.ceil(pageWidth * pixelsPerMm);
-          const pageCanvasHeight = Math.ceil(pageHeight * pixelsPerMm);
-          const pageMarginPx = margin * pixelsPerMm;
-          const cardWidthPx = imgWidth * pixelsPerMm;
-          const cardHeightPx = maxPageImageHeight * pixelsPerMm;
-          const context = canvas.getContext("2d", { willReadFrequently: true });
-          if (!context) {
-            throw new Error("PDF 페이지 분할을 위한 Canvas 컨텍스트를 생성하지 못했습니다.");
-          }
-
-          let sourceY = 0;
-          let pageNumber = 0;
-          while (sourceY < canvas.height) {
-            const targetY = Math.min(sourceY + maxSliceHeight, canvas.height);
-            let sliceEndY = targetY;
-            if (targetY < canvas.height) {
-              const searchStartY = Math.max(sourceY + 1, targetY - Math.floor(40 * pixelsPerMm));
-              const searchHeight = targetY - searchStartY;
-              if (searchHeight > 0) {
-                const imageData = context.getImageData(0, searchStartY, canvas.width, searchHeight);
-                for (let row = searchHeight - 1; row >= 0; row -= 1) {
-                  let hasInk = false;
-                  for (let x = 0; x < canvas.width; x += 1) {
-                    const pixelIndex = (row * canvas.width + x) * 4;
-                    if (
-                      imageData.data[pixelIndex + 3] > 0 &&
-                      (
-                        imageData.data[pixelIndex] < 245 ||
-                        imageData.data[pixelIndex + 1] < 245 ||
-                        imageData.data[pixelIndex + 2] < 245
-                      )
-                    ) {
-                      hasInk = true;
-                      break;
-                    }
-                  }
-                  if (!hasInk) {
-                    sliceEndY = searchStartY + row + 1;
-                    break;
-                  }
-                }
-              }
-            }
-
-            const sliceHeight = Math.max(1, sliceEndY - sourceY);
-            const pageCanvas = document.createElement("canvas");
-            pageCanvas.width = pageCanvasWidth;
-            pageCanvas.height = pageCanvasHeight;
-            const pageContext = pageCanvas.getContext("2d");
-            if (!pageContext) {
-              throw new Error("PDF 페이지 이미지를 생성하지 못했습니다.");
-            }
-            pageContext.fillStyle = "#e8e9e7";
-            pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-            pageContext.save();
-            pageContext.fillStyle = "rgba(91, 101, 101, 0.10)";
-            pageContext.beginPath();
-            pageContext.moveTo(0, pageCanvas.height * 0.68);
-            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.55);
-            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.69);
-            pageContext.lineTo(0, pageCanvas.height * 0.84);
-            pageContext.closePath();
-            pageContext.fill();
-            pageContext.fillStyle = "rgba(255, 255, 255, 0.55)";
-            pageContext.beginPath();
-            pageContext.moveTo(0, pageCanvas.height * 0.78);
-            pageContext.lineTo(pageCanvas.width, pageCanvas.height * 0.88);
-            pageContext.lineTo(pageCanvas.width, pageCanvas.height);
-            pageContext.lineTo(0, pageCanvas.height * 0.90);
-            pageContext.closePath();
-            pageContext.fill();
-            pageContext.restore();
-
-            const cardX = pageMarginPx;
-            const cardY = pageMarginPx;
-            const cardRadius = 16 * pixelsPerMm / cssPixelsPerMm;
-            pageContext.save();
-            pageContext.shadowColor = "rgba(39, 54, 60, 0.12)";
-            pageContext.shadowBlur = 12 * pixelsPerMm / cssPixelsPerMm;
-            pageContext.shadowOffsetX = 0;
-            pageContext.shadowOffsetY = 4 * pixelsPerMm / cssPixelsPerMm;
-            pageContext.fillStyle = "#fff";
-            pageContext.beginPath();
-            pageContext.roundRect(cardX, cardY, cardWidthPx, cardHeightPx, cardRadius);
-            pageContext.fill();
-            pageContext.restore();
-
-            pageContext.drawImage(
-              canvas,
-              0, sourceY, canvas.width, sliceHeight,
-              cardX, cardY, canvas.width, sliceHeight
+            const isLastAttempt = index === PDF_EXPORT_QUALITY_STEPS.length - 1;
+            console.warn(
+              `PDF export produced ${(fileSize / (1024 * 1024)).toFixed(2)}MB` +
+              `${isLastAttempt ? "" : ", retrying with lower image quality"}.`
             );
-
-            if (pageNumber > 0) {
-              pdf.addPage();
-            }
-            pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, pageHeight);
-
-            sourceY = sliceEndY;
-            pageNumber += 1;
           }
 
           pdf.save("업무보고서.pdf");
